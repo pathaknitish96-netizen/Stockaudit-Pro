@@ -292,11 +292,11 @@
                                 <td class="p-1"></td>
                                 <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',1,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',2,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
-                                <td class="p-1"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',3,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Qty</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',4,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Unit</span><i class="fa-solid fa-filter"></i></button></td>
-                                <td class="p-1"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',5,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Physical Qty</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',6,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
-                                <td class="p-1"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',7,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Status</span><i class="fa-solid fa-filter"></i></button></td>
                             </tr>
                         </thead>
                         <tbody id="pvCountTbody" class="divide-y divide-slate-100 text-slate-700">
@@ -458,6 +458,9 @@
                     <label class="text-xs font-semibold text-slate-600">Select Date:</label>
                     <input type="date" id="archiveDateSelect" onchange="loadArchiveByDate()" class="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
                     <input type="search" id="archiveSearchInput" oninput="applyArchiveSearch()" placeholder="Search code, name, unit..." class="text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white w-44 max-w-full">
+                    <button type="button" onclick="openColumnFilter('tableArchive',1,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Item Code</button>
+                    <button type="button" onclick="openColumnFilter('tableArchive',3,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter System Qty</button>
+                    <button type="button" onclick="openColumnFilter('tableArchive',4,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Physical Qty</button>
                     <button type="button" onclick="openColumnFilter('tableArchive',6,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Unit</button>
 
                     <div class="flex items-center space-x-2 no-print ml-4">
@@ -514,8 +517,10 @@
             <strong id="columnFilterTitle" class="text-sm">Filter</strong>
             <button type="button" onclick="closeColumnFilter()" class="p-1 text-slate-500" aria-label="Close filter"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <input id="columnFilterSearch" type="search" placeholder="Search values..." class="w-full p-2 text-sm border rounded mb-2" oninput="renderColumnFilterOptions()">
-        <div class="flex gap-2 mb-2">
+        <input id="columnFilterSearch" type="search" placeholder="Search values..." class="w-full p-2 text-sm border rounded mb-2" oninput="handleColumnFilterSearch()">
+        <div class="flex flex-wrap gap-2 mb-2">
+            <button type="button" onclick="sortActiveColumn('asc')" class="text-xs text-blue-700 underline">Sort A to Z</button>
+            <button type="button" onclick="sortActiveColumn('desc')" class="text-xs text-blue-700 underline">Sort Z to A</button>
             <button type="button" onclick="selectAllColumnFilterOptions(true)" class="text-xs text-blue-700 underline">Select all</button>
             <button type="button" onclick="selectAllColumnFilterOptions(false)" class="text-xs text-blue-700 underline">Clear all</button>
         </div>
@@ -943,7 +948,7 @@
                     if (!selected || !selected.__userApplied) return true;
                     const colIndex = Number(colText);
                     const value = (row.cells[colIndex]?.textContent || '').trim();
-                    return selected.has(value);
+                    return [...selected].some(item => String(item).trim().toLocaleLowerCase() === value.toLocaleLowerCase());
                 });
                 row.style.display = matchesAll ? '' : 'none';
             });
@@ -988,14 +993,61 @@
             menu.classList.remove('hidden');
         }
 
+        // Sort the currently filtered table by the column whose filter menu is open.
+        function sortActiveColumn(direction) {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex } = activeColumnFilter;
+            const table = document.getElementById(tableId);
+            const tbody = table?.querySelector('tbody');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const av = (a.cells[colIndex]?.textContent || '').trim();
+                const bv = (b.cells[colIndex]?.textContent || '').trim();
+                const result = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+                return direction === 'desc' ? -result : result;
+            });
+            rows.forEach(row => tbody.appendChild(row));
+            reapplySavedDropdownFilters(tableId);
+            if (tableId === 'tableArchive') applyArchiveSearch();
+        }
+
+        function handleColumnFilterSearch() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').trim().toLocaleLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            // Each search is independent: replace this column's pending selection
+            // with every value matching the current query. No Clear All/manual tick.
+            if (search) {
+                selected.clear();
+                uniqueValues.filter(value => String(value).toLocaleLowerCase().includes(search))
+                    .forEach(value => selected.add(value));
+                selected.__searchNarrowed = true;
+            } else {
+                selected.__searchNarrowed = false;
+                // Clearing the text restores all choices unless this filter was
+                // already applied; in that case preserve the applied selection.
+                if (!selected.__userApplied) uniqueValues.forEach(value => selected.add(value));
+            }
+            renderColumnFilterOptions();
+        }
+
         function renderColumnFilterOptions() {
             if (!activeColumnFilter) return;
             const { tableId, colIndex, uniqueValues } = activeColumnFilter;
-            const search = (document.getElementById('columnFilterSearch').value || '').toLowerCase();
+            const search = (document.getElementById('columnFilterSearch').value || '').trim().toLocaleLowerCase();
             const selected = columnFilterSelections[tableId][colIndex];
             const holder = document.getElementById('columnFilterOptions');
             holder.innerHTML = '';
-            uniqueValues.filter(v => v.toLowerCase().includes(search)).slice(0, 500).forEach(value => {
+            const matches = uniqueValues.filter(v => String(v).toLocaleLowerCase().includes(search));
+            if (!matches.length) {
+                holder.textContent = 'No matching values found';
+                holder.className = 'space-y-1 text-sm text-slate-500';
+                return;
+            }
+            holder.className = 'space-y-1 text-sm';
+            matches.slice(0, 500).forEach(value => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center gap-2 p-1 rounded hover:bg-slate-50';
                 const checkbox = document.createElement('input');
