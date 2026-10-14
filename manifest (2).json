@@ -1,0 +1,13 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Stockaudit-Pro",
+  "orientation": "any",
+  "scope": "/Stockaudit-Pro/",
+  "short_name": "Stockaudit",
+  "start_url": "/Stockaudit-Pro/",
+  "theme_color": "#ffffff",
+  "id": "Stockaudit-Pro",
+  "description": "Inventory Audit"
+}
