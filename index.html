@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory Audit & Physical Verification System</title>
-   <link rel="manifest" href="/Stockaudit-Pro/manifest.json">
+    <link rel="manifest" href="/Stockaudit-Pro/manifest.json">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
@@ -67,6 +67,18 @@
         }
         .print-only {
             display: none;
+        }
+        .column-filter-menu {
+            position: fixed;
+            z-index: 9999;
+            width: min(290px, calc(100vw - 24px));
+            max-height: 65vh;
+            overflow: auto;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .22);
+            padding: 12px;
         }
     </style>
 </head>
@@ -266,15 +278,15 @@
                                 <th class="p-3">Remarks / Notes</th>
                                 <th class="p-3 text-center">Status</th>
                             </tr>
-                            <!-- Per-Column Filter Row -->
+                            <!-- Excel-style searchable dropdown filters -->
                             <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 no-print">
                                 <td class="p-1"></td>
-                                <td class="p-1"><input type="text" oninput="applyTableFilter('tablePvCount', 1, this.value)" placeholder="Filter code..." class="w-full p-1 text-xs border rounded bg-white"></td>
-                                <td class="p-1"><input type="text" oninput="applyTableFilter('tablePvCount', 2, this.value)" placeholder="Filter description..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',1,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',2,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"></td>
-                                <td class="p-1"><input type="text" oninput="applyTableFilter('tablePvCount', 4, this.value)" placeholder="Unit..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',4,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Unit</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"></td>
-                                <td class="p-1"><input type="text" oninput="applyTableFilter('tablePvCount', 6, this.value)" placeholder="Filter remarks..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',6,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
                                 <td class="p-1"></td>
                             </tr>
                         </thead>
@@ -485,6 +497,24 @@
     </div>
 
     <!-- JavaScript Application Logic -->
+
+    <div id="columnFilterMenu" class="column-filter-menu hidden" role="dialog" aria-label="Column filter">
+        <div class="flex items-center justify-between gap-2 mb-2">
+            <strong id="columnFilterTitle" class="text-sm">Filter</strong>
+            <button type="button" onclick="closeColumnFilter()" class="p-1 text-slate-500" aria-label="Close filter"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <input id="columnFilterSearch" type="search" placeholder="Search values..." class="w-full p-2 text-sm border rounded mb-2" oninput="renderColumnFilterOptions()">
+        <div class="flex gap-2 mb-2">
+            <button type="button" onclick="selectAllColumnFilterOptions(true)" class="text-xs text-blue-700 underline">Select all</button>
+            <button type="button" onclick="selectAllColumnFilterOptions(false)" class="text-xs text-blue-700 underline">Clear all</button>
+        </div>
+        <div id="columnFilterOptions" class="space-y-1 text-sm"></div>
+        <div class="flex gap-2 mt-3 pt-2 border-t">
+            <button type="button" onclick="applyColumnFilterSelection()" class="flex-1 px-3 py-2 rounded bg-blue-600 text-white text-sm">Apply</button>
+            <button type="button" onclick="clearColumnFilterSelection()" class="px-3 py-2 rounded border text-sm">Clear</button>
+        </div>
+    </div>
+
     <script>
         // Global Application State stored in LocalStorage
         let inventoryData = [];
@@ -600,33 +630,41 @@
         }
 
         // Main Physical Quantity Update Engine
-        function updatePhysicalQty(id, value, remarks = null) {
+        function updatePhysicalQty(id, value, remarks = null, sourceInput = null) {
             const item = inventoryData.find(i => i.id === id);
             if (!item) return;
 
-            const selectedDate = document.getElementById('perpetualDateInput').value || new Date().toISOString().split('T')[0];
-
-            if (value === "" || value === null || value === undefined) {
+            const selectedDate = document.getElementById('perpetualDateInput')?.value || new Date().toISOString().split('T')[0];
+            const hasValue = value !== "" && value !== null && value !== undefined;
+            if (!hasValue) {
                 item.physicalQty = null;
             } else {
-                item.physicalQty = parseFloat(value);
-                item.date = selectedDate; // Tag date on entry
+                const parsedValue = parseFloat(value);
+                if (!Number.isFinite(parsedValue)) return;
+                item.physicalQty = parsedValue;
+                item.date = selectedDate;
             }
+            if (remarks !== null) item.remarks = remarks;
 
-            if (remarks !== null) {
-                item.remarks = remarks;
-            }
-
+            // Preserve the original save/archive workflow.
             saveStateToLocalStorage();
             updateStatsAndBadges();
 
-            // Re-render active views dynamically to handle instant removal
-            const activeTab = document.querySelector('.tab-content:not(.hidden)').id;
+            const activeTab = document.querySelector('.tab-content:not(.hidden)')?.id;
+            // If this edit came from a PV Count row, remove that row immediately after the
+            // quantity is committed. Do not re-render the table, as that closes Android's keyboard.
+            const pvRow = sourceInput?.closest('#pvCountTbody tr');
+            if (pvRow && hasValue) {
+                pvRow.style.display = 'none';
+                pvRow.dataset.pvCompleted = 'true';
+            }
 
             if (activeTab === 'pvCountTab') {
-                renderPvCountTable();
+                reapplySavedDropdownFilters('tablePvCount');
             } else if (activeTab === 'differenceTab') {
                 renderDifferenceTable();
+            } else if (activeTab === 'archiveTab') {
+                loadArchiveByDate();
             }
         }
 
@@ -645,7 +683,7 @@
             tbody.innerHTML = '';
 
             // Strict Filter: Only items where physicalQty === null
-            const pendingItems = inventoryData.filter(item => item.physicalQty === null);
+            const pendingItems = inventoryData.filter(item => item.physicalQty === null || item.physicalQty === undefined || item.physicalQty === "");
 
             if (pendingItems.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400 font-medium">All items have been counted & verified! 🎉</td></tr>`;
@@ -665,8 +703,9 @@
                         <input type="number" 
                                placeholder="Enter Qty"
                                class="w-28 px-2 py-1 text-center font-semibold border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 bg-amber-50/50 focus:bg-white text-slate-900 outline-none"
-                               onchange="updatePhysicalQty(${item.id}, this.value)"
-                               onkeydown="if(event.key==='Enter') updatePhysicalQty(${item.id}, this.value)">
+                               inputmode="decimal"
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)"
+                               onkeydown="if(event.key===\'Enter\') { event.preventDefault(); updatePhysicalQty(${item.id}, this.value, null, this); const inputs=Array.from(document.querySelectorAll('#pvCountTbody input[type=number]')).filter(el=>el.closest('tr') && el.closest('tr').style.display!=='none'); if(inputs[0]) inputs[0].focus({preventScroll:true}); }">
                     </td>
                     <td class="p-3">
                         <input type="text" 
@@ -681,6 +720,7 @@
                 `;
                 tbody.appendChild(tr);
             });
+                    reapplySavedDropdownFilters('tablePvCount');
         }
 
         // Render Tab 3: Difference List (Strict Non-Zero Difference Only)
@@ -718,7 +758,7 @@
                         <input type="number" 
                                value="${item.physicalQty}" 
                                class="w-24 px-2 py-1 text-center font-semibold border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 outline-none"
-                               onchange="updatePhysicalQty(${item.id}, this.value)">
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
                     </td>
                     <td class="p-3 text-right ${diffClass}">${diff > 0 ? '+' + diff : diff}</td>
                     <td class="p-3 text-slate-500">${item.unit}</td>
@@ -766,7 +806,7 @@
                                value="${item.physicalQty !== null ? item.physicalQty : ''}" 
                                placeholder="Count..."
                                class="w-24 px-2 py-1 text-center font-semibold border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 outline-none"
-                               onchange="updatePhysicalQty(${item.id}, this.value)">
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
                     </td>
                     <td class="p-3 text-right font-semibold text-slate-800">${diff}</td>
                     <td class="p-3 text-slate-500">${item.unit}</td>
@@ -812,7 +852,7 @@
                         <input type="number" 
                                value="${item.physicalQty}" 
                                class="w-24 px-2 py-1 text-center font-semibold border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 bg-purple-50/50 text-slate-900 outline-none"
-                               onchange="updatePhysicalQty(${item.id}, this.value)">
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
                     </td>
                     <td class="p-3 text-right font-bold ${diff !== 0 ? 'text-rose-600' : 'text-emerald-600'}">${diff}</td>
                     <td class="p-3 text-slate-500">${item.unit}</td>
@@ -828,29 +868,194 @@
             });
         }
 
+
+        // Excel-style searchable column filters (PV Count)
+        let activeColumnFilter = null;
+        const columnFilterSelections = {};
+        const COLUMN_FILTER_STORAGE_KEY = 'stockAuditColumnFiltersV1';
+
+        function loadSavedColumnFilters() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(COLUMN_FILTER_STORAGE_KEY) || '{}');
+                Object.keys(saved).forEach(tableId => {
+                    columnFilterSelections[tableId] = columnFilterSelections[tableId] || {};
+                    Object.keys(saved[tableId] || {}).forEach(col => {
+                        columnFilterSelections[tableId][col] = new Set(saved[tableId][col]);
+                        columnFilterSelections[tableId][col].__userApplied = true;
+                    });
+                });
+            } catch (e) { console.warn('Could not load saved column filters', e); }
+        }
+
+        function saveColumnFilters() {
+            try {
+                const serializable = {};
+                Object.keys(columnFilterSelections).forEach(tableId => {
+                    serializable[tableId] = {};
+                    Object.keys(columnFilterSelections[tableId]).forEach(col => {
+                        const set = columnFilterSelections[tableId][col];
+                        if (set && set.__userApplied) serializable[tableId][col] = [...set];
+                    });
+                });
+                localStorage.setItem(COLUMN_FILTER_STORAGE_KEY, JSON.stringify(serializable));
+            } catch (e) { console.warn('Could not save column filters', e); }
+        }
+
+        function reapplySavedDropdownFilters(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            const saved = columnFilterSelections[tableId] || {};
+            Object.keys(saved).forEach(colText => {
+                const colIndex = Number(colText);
+                const selected = saved[colText];
+                if (!selected || !selected.__userApplied) return;
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    const value = (row.cells[colIndex]?.textContent || '').trim();
+                    row.style.display = selected.has(value) ? '' : 'none';
+                });
+            });
+        }
+
+        loadSavedColumnFilters();
+
+        function openColumnFilter(tableId, colIndex, button) {
+            const table = document.getElementById(tableId);
+            const menu = document.getElementById('columnFilterMenu');
+            if (!table || !menu) return;
+
+            const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row =>
+                row.cells.length > colIndex && row.cells.length > 1
+            );
+            const uniqueValues = [...new Set(rows.map(row =>
+                (row.cells[colIndex].textContent || '').trim()
+            ))].sort((a, b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'}));
+
+            activeColumnFilter = { tableId, colIndex, button, uniqueValues };
+            if (!columnFilterSelections[tableId]) columnFilterSelections[tableId] = {};
+            if (!columnFilterSelections[tableId][colIndex]) {
+                columnFilterSelections[tableId][colIndex] = new Set(uniqueValues);
+            } else {
+                const existing = columnFilterSelections[tableId][colIndex];
+                const wasApplied = !!existing.__userApplied;
+                if (!wasApplied) {
+                    uniqueValues.forEach(v => existing.add(v));
+                }
+            }
+
+            document.getElementById('columnFilterTitle').textContent =
+                `Filter: ${table.querySelectorAll('thead tr:first-child th')[colIndex]?.textContent.trim() || 'Column'}`;
+            document.getElementById('columnFilterSearch').value = '';
+            renderColumnFilterOptions();
+
+            const rect = button.getBoundingClientRect();
+            menu.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 302)) + 'px';
+            menu.style.top = Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - 350)) + 'px';
+            menu.classList.remove('hidden');
+        }
+
+        function renderColumnFilterOptions() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').toLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            const holder = document.getElementById('columnFilterOptions');
+            holder.innerHTML = '';
+            uniqueValues.filter(v => v.toLowerCase().includes(search)).slice(0, 500).forEach(value => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 p-1 rounded hover:bg-slate-50';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selected.has(value);
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) selected.add(value);
+                    else selected.delete(value);
+                });
+                const text = document.createElement('span');
+                text.textContent = value || '(blank)';
+                text.className = 'break-all';
+                label.append(checkbox, text);
+                holder.appendChild(label);
+            });
+        }
+
+        function selectAllColumnFilterOptions(select) {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').toLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            uniqueValues.filter(v => v.toLowerCase().includes(search)).forEach(v => {
+                if (select) selected.add(v);
+                else selected.delete(v);
+            });
+            renderColumnFilterOptions();
+        }
+
+        function applyColumnFilterSelection() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const selected = columnFilterSelections[tableId][colIndex];
+            selected.__userApplied = true;
+            selected.__userApplied = true;
+            saveColumnFilters();
+            reapplySavedDropdownFilters(tableId);
+            activeColumnFilter.button.classList.toggle('text-blue-700', selected.size !== uniqueValues.length);
+            activeColumnFilter.button.classList.toggle('border-blue-500', selected.size !== uniqueValues.length);
+            closeColumnFilter();
+        }
+
+        function clearColumnFilterSelection() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            columnFilterSelections[tableId][colIndex] = new Set(uniqueValues);
+            columnFilterSelections[tableId][colIndex].__userApplied = false;
+            saveColumnFilters();
+            reapplySavedDropdownFilters(tableId);
+            closeColumnFilter();
+        }
+
+        function closeColumnFilter() {
+            document.getElementById('columnFilterMenu')?.classList.add('hidden');
+            activeColumnFilter = null;
+        }
+
+        document.addEventListener('click', event => {
+            const menu = document.getElementById('columnFilterMenu');
+            if (menu && !menu.classList.contains('hidden') &&
+                !menu.contains(event.target) && !event.target.closest('button[onclick*="openColumnFilter"]')) {
+                closeColumnFilter();
+            }
+        });
+
         // Live Column Filtering Engine
         function applyTableFilter(tableId, colIndex, query) {
             const table = document.getElementById(tableId);
-            const rows = table.querySelectorAll('tbody tr');
-            const filterText = query.toLowerCase();
+            if (!table) return;
+            const filterText = String(query || '').toLowerCase();
 
-            rows.forEach(row => {
+            table.querySelectorAll('tbody tr').forEach(row => {
                 const cells = row.getElementsByTagName('td');
                 if (cells.length > colIndex) {
                     const cellText = cells[colIndex].textContent || cells[colIndex].innerText || "";
-                    if (cellText.toLowerCase().includes(filterText)) {
-                        row.style.display = "";
-                    } else {
-                        row.style.display = "none";
-                    }
+                    row.style.display = cellText.toLowerCase().includes(filterText) ? "" : "none";
                 }
+            });
+        }
+
+        // Reapply current header filters after table rows are rebuilt.
+        function reapplyTableFilters(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            table.querySelectorAll('thead input[oninput]').forEach(input => {
+                const handler = input.getAttribute('oninput') || '';
+                const match = handler.match(/applyTableFilter\('([^']+)',\s*(\d+),\s*this\.value\)/);
+                if (match) applyTableFilter(match[1], Number(match[2]), input.value || '');
             });
         }
 
         // Helper: Refresh Stats and Badges Across Screen
         function updateStatsAndBadges() {
             const total = inventoryData.length;
-            const verified = inventoryData.filter(i => i.physicalQty !== null).length;
+            const verified = inventoryData.filter(i => i.physicalQty !== null && i.physicalQty !== undefined && i.physicalQty !== "").length;
             const pending = total - verified;
 
             const diffCount = inventoryData.filter(i => i.physicalQty !== null && (i.physicalQty - i.systemQty !== 0)).length;
