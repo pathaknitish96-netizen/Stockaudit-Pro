@@ -1,0 +1,13 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Stockaudit-Pro",
+  "orientation": "any",
+  "scope": "/pathaknitish96-netizen.github",
+  "short_name": "Stockaudit",
+  "start_url": "/pathaknitish96-netizen.github",
+  "theme_color": "#ffffff",
+  "id": "Stockaudit-Pro",
+  "description": "Inventory audit verification"
+}
