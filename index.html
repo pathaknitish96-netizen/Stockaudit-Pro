@@ -889,9 +889,13 @@
             table.querySelectorAll('tbody tr').forEach(row => {
                 if (row.cells.length < 2) return;
                 const textMatches = !query || row.textContent.toLowerCase().includes(query);
-                const unitSelection = columnFilterSelections?.tableArchive?.[6];
-                const unitMatches = !unitSelection || !unitSelection.__userApplied || unitSelection.has((row.cells[6]?.textContent || '').trim());
-                row.style.display = textMatches && unitMatches ? '' : 'none';
+                const saved = columnFilterSelections?.tableArchive || {};
+                const columnsMatch = Object.keys(saved).every(colText => {
+                    const selected = saved[colText];
+                    if (!selected || !selected.__userApplied) return true;
+                    return selected.has((row.cells[Number(colText)]?.textContent || '').trim());
+                });
+                row.style.display = textMatches && columnsMatch ? '' : 'none';
             });
         }
 
@@ -931,15 +935,19 @@
             const table = document.getElementById(tableId);
             if (!table) return;
             const saved = columnFilterSelections[tableId] || {};
-            Object.keys(saved).forEach(colText => {
-                const colIndex = Number(colText);
-                const selected = saved[colText];
-                if (!selected || !selected.__userApplied) return;
-                table.querySelectorAll('tbody tr').forEach(row => {
+            // All applied column filters must match (AND logic). Do not let a later
+            // column overwrite the visibility result from an earlier column.
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const matchesAll = Object.keys(saved).every(colText => {
+                    const selected = saved[colText];
+                    if (!selected || !selected.__userApplied) return true;
+                    const colIndex = Number(colText);
                     const value = (row.cells[colIndex]?.textContent || '').trim();
-                    row.style.display = selected.has(value) ? '' : 'none';
+                    return selected.has(value);
                 });
+                row.style.display = matchesAll ? '' : 'none';
             });
+            if (tableId === 'tableArchive') applyArchiveSearch();
         }
 
         loadSavedColumnFilters();
@@ -1021,7 +1029,6 @@
             if (!activeColumnFilter) return;
             const { tableId, colIndex, uniqueValues } = activeColumnFilter;
             const selected = columnFilterSelections[tableId][colIndex];
-            selected.__userApplied = true;
             selected.__userApplied = true;
             saveColumnFilters();
             reapplySavedDropdownFilters(tableId);
