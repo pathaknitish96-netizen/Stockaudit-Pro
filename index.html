@@ -452,6 +452,15 @@
      <div id="usersStatus" class="mt-3 text-sm text-slate-600">Checking access…</div>
     </div>
     <div id="userManagementPanel" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
+      <h3 class="font-bold text-blue-900"><i class="fa-solid fa-boxes-stacked mr-2"></i>View User Stock (Master Owner)</h3>
+      <p class="text-sm text-blue-800">Choose an account to open its separate inventory. Uploads, edits and exports will apply to the selected account, not your own stock.</p>
+      <div class="flex flex-col sm:flex-row gap-2">
+       <select id="ownerInventoryUserSelect" class="w-full sm:flex-1 p-2 border rounded-lg bg-white text-sm"><option value="">Loading registered accounts…</option></select>
+       <button type="button" id="ownerLoadInventoryButton" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Open Selected Stock</button>
+      </div>
+      <p id="ownerInventoryTargetLabel" class="text-xs text-blue-900">Current view: your own stock</p>
+     </div>
      <h3 class="font-bold">Register / Update User</h3>
      <form id="userRoleForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div>
@@ -562,6 +571,7 @@
         let stockAuditCurrentPermissions = { upload: true, edit: true, export: true, clear: false, manageAllData: false };
         let stockAuditSharedReady = false;
         let stockAuditSharedLoadPromise = null;
+        let stockAuditInventoryTargetUid = null; // Owner may switch the viewed inventory; normal users stay scoped to their own UID.
         try {
           if (!firebase.apps.length) firebase.initializeApp(stockAuditFirebaseConfig);
           stockAuditAuth = firebase.auth();
@@ -664,7 +674,14 @@
               document.getElementById('firebaseUserLabel').textContent = `${roleLabel} • ${user.email || user.phoneNumber || user.uid}`;
               applyRolePermissions();
               await writeActivityLog('login', 'Signed in to StockAudit Pro');
-              if (user.uid === STOCKAUDIT_MASTER_UID) { document.getElementById('userManagementPanel').classList.remove('hidden'); document.getElementById('usersStatus').textContent = 'Master Owner access verified.'; loadManagedUsers(); loadActivityLogs(); }
+              stockAuditInventoryTargetUid = user.uid;
+              if (user.uid === STOCKAUDIT_MASTER_UID) {
+                document.getElementById('userManagementPanel').classList.remove('hidden');
+                document.getElementById('usersStatus').textContent = 'Master Owner access verified.';
+                loadManagedUsers(); loadActivityLogs();
+                const targetLabel = document.getElementById('ownerInventoryTargetLabel');
+                if (targetLabel) targetLabel.textContent = 'Current view: your own stock';
+              }
               await loadSharedInventoryFromFirestore();
             } catch (err) {
               console.error('Role load failed:', err);
@@ -732,7 +749,8 @@
           if (stockAuditSharedLoadPromise) return stockAuditSharedLoadPromise;
           stockAuditSharedLoadPromise = (async () => {
             stockAuditSharedReady = false;
-            const uid = stockAuditAuth.currentUser.uid;
+            const signedInUid = stockAuditAuth.currentUser.uid;
+            const uid = signedInUid === STOCKAUDIT_MASTER_UID && stockAuditInventoryTargetUid ? stockAuditInventoryTargetUid : signedInUid;
             // Clear in-memory data before loading this account, preventing another account's data flashing on screen.
             inventoryData = [];
             metadata = { company:'', plant:'', project:'' };
@@ -787,11 +805,12 @@
         }
         async function saveSharedInventoryToFirestore() {
           if (!stockAuditSharedReady || !stockAuditDb || !stockAuditAuth?.currentUser) return;
-          const uid = stockAuditAuth.currentUser.uid;
-          const canWrite = uid === STOCKAUDIT_MASTER_UID || stockAuditCurrentPermissions.upload || stockAuditCurrentPermissions.edit || stockAuditCurrentPermissions.manageAllData;
+          const signedInUid = stockAuditAuth.currentUser.uid;
+          const uid = signedInUid === STOCKAUDIT_MASTER_UID && stockAuditInventoryTargetUid ? stockAuditInventoryTargetUid : signedInUid;
+          const canWrite = signedInUid === STOCKAUDIT_MASTER_UID || stockAuditCurrentPermissions.upload || stockAuditCurrentPermissions.edit || stockAuditCurrentPermissions.manageAllData;
           if (!canWrite) return;
           try {
-            await stockAuditDb.collection('sharedInventory').doc(uid).set({ inventoryData, metadata, ownerUid: uid, updatedBy: uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            await stockAuditDb.collection('sharedInventory').doc(uid).set({ inventoryData, metadata, ownerUid: uid, updatedBy: signedInUid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
           } catch (e) { console.error('Account inventory save failed:', e); showToast('Local save worked, but this account cloud save failed. Check Firestore Rules/network.', 'error'); }
         }
         async function writeActivityLog(action, details) {
@@ -807,6 +826,19 @@
             const snap = await stockAuditDb.collection('userRoles').get(); tbody.innerHTML = '';
             const rows = []; snap.forEach(doc => rows.push({ uid: doc.id, ...doc.data() }));
             if (!rows.some(r => r.uid === STOCKAUDIT_MASTER_UID)) rows.unshift({ uid: STOCKAUDIT_MASTER_UID, email: stockAuditAuth.currentUser.email || 'Master Owner', role: 'owner', active: true, permissions: { upload:true, edit:true, export:true, clear:true } });
+            const inventorySelect = document.getElementById('ownerInventoryUserSelect');
+            if (inventorySelect) {
+              const previousTarget = stockAuditInventoryTargetUid || STOCKAUDIT_MASTER_UID;
+              inventorySelect.innerHTML = '';
+              rows.forEach(r => {
+                const option = document.createElement('option');
+                option.value = r.uid;
+                const roleName = r.uid === STOCKAUDIT_MASTER_UID ? 'Master Owner' : ((r.role || 'user') === 'admin' ? 'Admin' : 'Normal User');
+                option.textContent = `${roleName} — ${r.email || r.uid}${r.active === false ? ' (Disabled)' : ''}`;
+                inventorySelect.appendChild(option);
+              });
+              inventorySelect.value = rows.some(r => r.uid === previousTarget) ? previousTarget : STOCKAUDIT_MASTER_UID;
+            }
             if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="p-3">No users registered yet.</td></tr>'; return; }
             rows.forEach(r => { const tr=document.createElement('tr'); tr.className='border-t'; const vals=[r.uid,r.email||'',r.role||'user',r.active===false?'Disabled':'Active',Object.entries(r.permissions||{}).filter(x=>x[1]).map(x=>x[0]).join(', ')||'None']; vals.forEach(v=>{const td=document.createElement('td');td.className='p-2 align-top';td.textContent=String(v);tr.appendChild(td);}); const td=document.createElement('td');td.className='p-2'; if(r.uid!==STOCKAUDIT_MASTER_UID){const b=document.createElement('button');b.className='text-blue-700 underline';b.textContent='Edit';b.type='button';b.onclick=()=>{document.getElementById('managedUid').value=r.uid;document.getElementById('managedEmail').value=r.email||'';document.getElementById('managedRole').value=r.role==='admin'?'admin':'user';document.getElementById('managedActive').value=String(r.active!==false);['upload','edit','export','clear'].forEach(k=>document.getElementById('perm'+k[0].toUpperCase()+k.slice(1)).checked=!!(r.permissions||{})[k]);document.getElementById('permManageAllData').checked=!!(r.permissions||{}).manageAllData;};td.appendChild(b);} else td.textContent='Protected';tr.appendChild(td);tbody.appendChild(tr); });
           } catch (e) { tbody.innerHTML='<tr><td colspan="6" class="p-3 text-rose-600">Unable to load users. Check Firestore Security Rules.</td></tr>'; console.error(e); }
@@ -815,6 +847,22 @@
           if (stockAuditAuth?.currentUser?.uid !== STOCKAUDIT_MASTER_UID) return;
           const tbody=document.getElementById('activityLogsTbody');
           try { const snap=await stockAuditDb.collection('activityLogs').orderBy('createdAt','desc').limit(100).get(); tbody.innerHTML=''; if(snap.empty){tbody.innerHTML='<tr><td colspan="4" class="p-3">No activity recorded yet.</td></tr>';return;} snap.forEach(doc=>{const d=doc.data();const tr=document.createElement('tr');tr.className='border-t';const when=d.createdAt?.toDate?d.createdAt.toDate().toLocaleString():'Pending';[when,d.actor||d.uid||'',d.action||'',d.details||''].forEach(v=>{const td=document.createElement('td');td.className='p-2 align-top';td.textContent=String(v);tr.appendChild(td);});tbody.appendChild(tr);}); } catch(e) {tbody.innerHTML='<tr><td colspan="4" class="p-3 text-rose-600">Unable to load activity. Check rules and the createdAt index if prompted.</td></tr>';console.error(e);} }
+        document.getElementById('ownerLoadInventoryButton')?.addEventListener('click', async () => {
+          if (stockAuditAuth?.currentUser?.uid !== STOCKAUDIT_MASTER_UID) { showToast('Only Master Owner can switch user stock.', 'error'); return; }
+          const select = document.getElementById('ownerInventoryUserSelect');
+          const targetUid = select?.value;
+          if (!targetUid) { showToast('Select an account first.', 'error'); return; }
+          stockAuditInventoryTargetUid = targetUid;
+          const option = select.options[select.selectedIndex];
+          const label = document.getElementById('ownerInventoryTargetLabel');
+          if (label) label.textContent = `Current view: ${option ? option.textContent : targetUid}`;
+          await loadSharedInventoryFromFirestore();
+          if (stockAuditSharedReady) {
+            const selectedRole = targetUid === STOCKAUDIT_MASTER_UID ? 'Master Owner' : ((Array.from(select.options).find(o => o.value === targetUid)?.textContent || '').startsWith('Admin') ? 'Admin' : 'Normal User');
+            showToast(`${selectedRole} inventory opened. Upload/edit/save applies to this selected account.`, 'success');
+            switchTab('uploadTab');
+          }
+        });
         document.getElementById('userRoleForm')?.addEventListener('submit', async e => {
           e.preventDefault(); if(stockAuditAuth?.currentUser?.uid!==STOCKAUDIT_MASTER_UID){showToast('Only Master Owner can manage users.','error');return;}
           const uid=document.getElementById('managedUid').value.trim(); if(!uid || uid===STOCKAUDIT_MASTER_UID){showToast('Enter a non-owner Firebase Auth UID.','error');return;}
@@ -1560,7 +1608,8 @@
 
         // Local Storage Persistence
         function saveStateToLocalStorage() {
-            const uid = stockAuditAuth?.currentUser?.uid;
+            const signedInUid = stockAuditAuth?.currentUser?.uid;
+            const uid = signedInUid === STOCKAUDIT_MASTER_UID && stockAuditInventoryTargetUid ? stockAuditInventoryTargetUid : signedInUid;
             if (uid) {
                 localStorage.setItem(inventoryStorageKey(uid), JSON.stringify(inventoryData));
                 localStorage.setItem(metadataStorageKey(uid), JSON.stringify(metadata));
