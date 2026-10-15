@@ -647,7 +647,7 @@
             loginGateEl.style.display = user ? 'none' : 'flex';
             userBarEl.style.display = user ? 'flex' : 'none';
             document.getElementById('btn-usersTab')?.classList.toggle('hidden', !user || user.uid !== STOCKAUDIT_MASTER_UID);
-            if (!user) { stockAuditCurrentRole = 'user'; stockAuditCurrentPermissions = { upload: true, edit: true, export: true, clear: false, manageAllData: false }; return; }
+            if (!user) { stockAuditSharedReady = false; inventoryData = []; metadata = { company:'', plant:'', project:'' }; renderAllViews(); stockAuditCurrentRole = 'user'; stockAuditCurrentPermissions = { upload: false, edit: false, export: false, clear: false, manageAllData: false }; return; }
             try {
               if (user.uid === STOCKAUDIT_MASTER_UID) {
                 stockAuditCurrentRole = 'owner';
@@ -665,7 +665,7 @@
               applyRolePermissions();
               await writeActivityLog('login', 'Signed in to StockAudit Pro');
               if (user.uid === STOCKAUDIT_MASTER_UID) { document.getElementById('userManagementPanel').classList.remove('hidden'); document.getElementById('usersStatus').textContent = 'Master Owner access verified.'; loadManagedUsers(); loadActivityLogs(); }
-              await loadSharedInventoryFromFirestore(user.uid === STOCKAUDIT_MASTER_UID);
+              await loadSharedInventoryFromFirestore();
             } catch (err) {
               console.error('Role load failed:', err);
               document.getElementById('usersStatus').textContent = 'Could not load roles. Check Firestore setup and Security Rules.';
@@ -725,43 +725,74 @@
           document.querySelectorAll('button[onclick^="exportToExcel"],button[onclick^="exportToPDF"]').forEach(b => b.disabled = !(owner || stockAuditCurrentPermissions.export || stockAuditCurrentPermissions.manageAllData));
           document.querySelectorAll('#pvCountTbody input[type="number"],#differenceTbody input[type="number"],#perpetualTbody input[type="number"]').forEach(el => el.disabled = !(owner || stockAuditCurrentPermissions.edit || stockAuditCurrentPermissions.manageAllData));
         }
-        async function loadSharedInventoryFromFirestore(isOwner) {
+        function inventoryStorageKey(uid) { return `inventory_app_data_${uid}`; }
+        function metadataStorageKey(uid) { return `inventory_app_metadata_${uid}`; }
+        async function loadSharedInventoryFromFirestore() {
           if (!stockAuditDb || !stockAuditAuth?.currentUser) return;
           if (stockAuditSharedLoadPromise) return stockAuditSharedLoadPromise;
           stockAuditSharedLoadPromise = (async () => {
             stockAuditSharedReady = false;
+            const uid = stockAuditAuth.currentUser.uid;
+            // Clear in-memory data before loading this account, preventing another account's data flashing on screen.
+            inventoryData = [];
+            metadata = { company:'', plant:'', project:'' };
+            renderAllViews();
             try {
-              const snap = await stockAuditDb.collection('sharedInventory').doc('current').get();
+              const snap = await stockAuditDb.collection('sharedInventory').doc(uid).get();
               if (snap.exists) {
                 const d = snap.data() || {};
                 inventoryData = Array.isArray(d.inventoryData) ? d.inventoryData : [];
                 metadata = d.metadata && typeof d.metadata === 'object' ? d.metadata : { company:'', plant:'', project:'' };
-                document.getElementById('inputCompany').value = metadata.company || '';
-                document.getElementById('inputPlant').value = metadata.plant || '';
-                document.getElementById('inputProject').value = metadata.project || '';
-                localStorage.setItem('inventory_app_data', JSON.stringify(inventoryData));
-                localStorage.setItem('inventory_app_metadata', JSON.stringify(metadata));
-                renderAllViews();
-              } else if (isOwner) {
-                // First owner session migrates the existing local inventory to the shared Firestore document.
-                await stockAuditDb.collection('sharedInventory').doc('current').set({ inventoryData, metadata, updatedBy: stockAuditAuth.currentUser.uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+              } else {
+                // One-time migration: preserve the old shared document as the Owner's private inventory.
+                if (uid === STOCKAUDIT_MASTER_UID) {
+                  const legacyCloud = await stockAuditDb.collection('sharedInventory').doc('current').get();
+                  if (legacyCloud.exists) {
+                    const legacyCloudData = legacyCloud.data() || {};
+                    inventoryData = Array.isArray(legacyCloudData.inventoryData) ? legacyCloudData.inventoryData : [];
+                    metadata = legacyCloudData.metadata && typeof legacyCloudData.metadata === 'object' ? legacyCloudData.metadata : { company:'', plant:'', project:'' };
+                  }
+                }
+                // Keep each account's browser cache separate. Only the Owner may migrate the old unscoped cache.
+                const scopedData = localStorage.getItem(inventoryStorageKey(uid));
+                const scopedMeta = localStorage.getItem(metadataStorageKey(uid));
+                const legacyCloudExists = uid === STOCKAUDIT_MASTER_UID && (await stockAuditDb.collection('sharedInventory').doc('current').get()).exists;
+                if (scopedData) inventoryData = JSON.parse(scopedData);
+                else if (uid === STOCKAUDIT_MASTER_UID && !legacyCloudExists) {
+                  const legacy = localStorage.getItem('inventory_app_data');
+                  if (legacy) inventoryData = JSON.parse(legacy);
+                }
+                if (scopedMeta) metadata = JSON.parse(scopedMeta);
+                else if (uid === STOCKAUDIT_MASTER_UID && !legacyCloudExists) {
+                  const legacyMeta = localStorage.getItem('inventory_app_metadata');
+                  if (legacyMeta) metadata = JSON.parse(legacyMeta);
+                }
+                // Create this account's own cloud document, including an empty inventory for new users.
+                await stockAuditDb.collection('sharedInventory').doc(uid).set({ inventoryData, metadata, ownerUid: uid, updatedBy: uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
               }
+              document.getElementById('inputCompany').value = metadata.company || '';
+              document.getElementById('inputPlant').value = metadata.plant || '';
+              document.getElementById('inputProject').value = metadata.project || '';
+              localStorage.setItem(inventoryStorageKey(uid), JSON.stringify(inventoryData));
+              localStorage.setItem(metadataStorageKey(uid), JSON.stringify(metadata));
+              renderAllViews();
               stockAuditSharedReady = true;
             } catch (e) {
               stockAuditSharedReady = false;
-              console.error('Shared inventory load failed:', e);
-              showToast('Shared inventory could not load. Check Firestore Rules.', 'error');
+              console.error('Account inventory load failed:', e);
+              showToast('This account inventory could not load. Check Firestore Rules.', 'error');
             } finally { stockAuditSharedLoadPromise = null; }
           })();
           return stockAuditSharedLoadPromise;
         }
         async function saveSharedInventoryToFirestore() {
           if (!stockAuditSharedReady || !stockAuditDb || !stockAuditAuth?.currentUser) return;
-          const canWrite = stockAuditAuth.currentUser.uid === STOCKAUDIT_MASTER_UID || stockAuditCurrentPermissions.upload || stockAuditCurrentPermissions.edit || stockAuditCurrentPermissions.manageAllData;
+          const uid = stockAuditAuth.currentUser.uid;
+          const canWrite = uid === STOCKAUDIT_MASTER_UID || stockAuditCurrentPermissions.upload || stockAuditCurrentPermissions.edit || stockAuditCurrentPermissions.manageAllData;
           if (!canWrite) return;
           try {
-            await stockAuditDb.collection('sharedInventory').doc('current').set({ inventoryData, metadata, updatedBy: stockAuditAuth.currentUser.uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-          } catch (e) { console.error('Shared inventory save failed:', e); showToast('Local save worked, but shared cloud save failed. Check Firestore Rules/network.', 'error'); }
+            await stockAuditDb.collection('sharedInventory').doc(uid).set({ inventoryData, metadata, ownerUid: uid, updatedBy: uid, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          } catch (e) { console.error('Account inventory save failed:', e); showToast('Local save worked, but this account cloud save failed. Check Firestore Rules/network.', 'error'); }
         }
         async function writeActivityLog(action, details) {
           if (!stockAuditDb || !stockAuditAuth?.currentUser) return;
@@ -1529,23 +1560,21 @@
 
         // Local Storage Persistence
         function saveStateToLocalStorage() {
-            localStorage.setItem('inventory_app_data', JSON.stringify(inventoryData));
-            localStorage.setItem('inventory_app_metadata', JSON.stringify(metadata));
+            const uid = stockAuditAuth?.currentUser?.uid;
+            if (uid) {
+                localStorage.setItem(inventoryStorageKey(uid), JSON.stringify(inventoryData));
+                localStorage.setItem(metadataStorageKey(uid), JSON.stringify(metadata));
+            }
             saveSharedInventoryToFirestore();
         }
 
         function loadStateFromLocalStorage() {
-            const savedData = localStorage.getItem('inventory_app_data');
-            const savedMeta = localStorage.getItem('inventory_app_metadata');
-
-            if (savedData) inventoryData = JSON.parse(savedData);
-            if (savedMeta) {
-                metadata = JSON.parse(savedMeta);
-                document.getElementById('inputCompany').value = metadata.company || '';
-                document.getElementById('inputPlant').value = metadata.plant || '';
-                document.getElementById('inputProject').value = metadata.project || '';
-                saveMetadata();
-            }
+            // Do not load unscoped inventory before Firebase identifies the signed-in account.
+            inventoryData = [];
+            metadata = { company: '', plant: '', project: '' };
+            document.getElementById('inputCompany').value = '';
+            document.getElementById('inputPlant').value = '';
+            document.getElementById('inputProject').value = '';
         }
 
         // Confirm Clear All System Data
