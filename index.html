@@ -12,6 +12,7 @@
   <!-- Firebase Authentication (compat SDK for this standalone HTML app) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- SheetJS CDN (XLSX) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- jsPDF & AutoTable CDN -->
@@ -174,6 +175,7 @@
       <button onclick="switchTab('differenceTab')" id="btn-differenceTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-triangle-exclamation"></i> <span>Difference List</span> <span id="diffBadge" class="ml-1 px-2 py-0.5 text-xs bg-rose-500 text-white font-bold rounded-full">0</span></button>
       <button onclick="switchTab('perpetualTab')" id="btn-perpetualTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-layer-group"></i> <span>Perpetual Counting</span></button>
       <button onclick="switchTab('archiveTab')" id="btn-archiveTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-box-archive"></i> <span>Date Archive</span></button>
+      <button onclick="switchTab('usersTab')" id="btn-usersTab" class="tab-btn hidden px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-users-gear"></i><span>User Management</span></button>
      </nav>
     </div>
    </div>
@@ -442,6 +444,82 @@
      </div>
     </div>
    </section>
+   <!-- TAB 6: USER MANAGEMENT (Master Owner only) -->
+   <section id="usersTab" class="tab-content hidden space-y-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+     <h2 class="text-lg font-bold mb-2"><i class="fa-solid fa-users-gear text-blue-600 mr-2"></i>User Management</h2>
+     <p class="text-sm text-slate-600">Add a Firebase Authentication user, then register their UID and role here. For safety, only the Master Owner can manage roles. Never share passwords.</p>
+     <div id="usersStatus" class="mt-3 text-sm text-slate-600">Checking access…</div>
+    </div>
+    <div id="userManagementPanel" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+     <h3 class="font-bold">Register / Update User</h3>
+     <form id="userRoleForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+       <label class="block text-xs font-semibold mb-1">Firebase Auth UID</label><input id="managedUid" required class="w-full p-2 border rounded-lg text-sm" placeholder="Paste UID from Firebase Authentication">
+      </div>
+      <div>
+       <label class="block text-xs font-semibold mb-1">User email / phone</label><input id="managedEmail" class="w-full p-2 border rounded-lg text-sm" placeholder="Email or phone number">
+      </div>
+      <div>
+       <label class="block text-xs font-semibold mb-1">Role</label><select id="managedRole" class="w-full p-2 border rounded-lg text-sm"><option value="user">Normal User</option><option value="admin">Admin</option></select>
+      </div>
+      <div>
+       <label class="block text-xs font-semibold mb-1">Access status</label><select id="managedActive" class="w-full p-2 border rounded-lg text-sm"><option value="true">Active</option><option value="false">Disabled</option></select>
+      </div>
+      <div class="md:col-span-2 flex flex-wrap gap-3 text-sm">
+       <label class="flex items-center gap-2"><input type="checkbox" id="permUpload" checked> Upload inventory</label> <label class="flex items-center gap-2"><input type="checkbox" id="permEdit" checked> Enter / edit counts</label> <label class="flex items-center gap-2"><input type="checkbox" id="permExport" checked> Export reports</label> <label class="flex items-center gap-2"><input type="checkbox" id="permClear"> Clear all data</label>
+      </div>
+      <div class="md:col-span-2">
+       <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Save User Role</button>
+      </div>
+     </form>
+     <div class="border-t pt-4">
+      <h3 class="font-bold mb-2">Registered Users</h3>
+      <div class="overflow-x-auto">
+       <table class="w-full text-sm">
+        <thead>
+         <tr class="text-left bg-slate-50">
+          <th class="p-2">UID</th>
+          <th class="p-2">Email / Phone</th>
+          <th class="p-2">Role</th>
+          <th class="p-2">Status</th>
+          <th class="p-2">Permissions</th>
+          <th class="p-2">Action</th>
+         </tr>
+        </thead>
+        <tbody id="managedUsersTbody">
+         <tr>
+          <td colspan="6" class="p-3 text-slate-500">Loading…</td>
+         </tr>
+        </tbody>
+       </table>
+      </div>
+     </div>
+     <div class="border-t pt-4">
+      <div class="flex items-center justify-between gap-2">
+       <h3 class="font-bold">Recent Activity</h3>
+       <button type="button" onclick="loadActivityLogs()" class="text-blue-700 underline text-sm">Refresh</button>
+      </div>
+      <div class="overflow-x-auto mt-2">
+       <table class="w-full text-sm">
+        <thead>
+         <tr class="text-left bg-slate-50">
+          <th class="p-2">Time</th>
+          <th class="p-2">User</th>
+          <th class="p-2">Action</th>
+          <th class="p-2">Details</th>
+         </tr>
+        </thead>
+        <tbody id="activityLogsTbody">
+         <tr>
+          <td colspan="4" class="p-3 text-slate-500">Loading…</td>
+         </tr>
+        </tbody>
+       </table>
+      </div>
+     </div>
+    </div>
+   </section>
   </main>
   <!-- Custom Floating Toast Alert Notification -->
   <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs transform transition-all duration-300 translate-y-20 opacity-0 z-50">
@@ -479,9 +557,13 @@
         };
         const STOCKAUDIT_MASTER_UID = "8NEStfygyaTFhyPQ1oYWAMdotvx2";
         let stockAuditAuth = null;
+        let stockAuditDb = null;
+        let stockAuditCurrentRole = 'user';
+        let stockAuditCurrentPermissions = { upload: true, edit: true, export: true, clear: false };
         try {
           if (!firebase.apps.length) firebase.initializeApp(stockAuditFirebaseConfig);
           stockAuditAuth = firebase.auth();
+          stockAuditDb = firebase.firestore();
         } catch (e) {
           console.error('Firebase initialization error:', e);
           const msg = document.getElementById('firebaseLoginMessage');
@@ -559,12 +641,33 @@
           } finally { btn.disabled = false; btn.textContent = 'Verify OTP & Sign in'; }
         });
         if (stockAuditAuth) {
-          stockAuditAuth.onAuthStateChanged(user => {
+          stockAuditAuth.onAuthStateChanged(async user => {
             loginGateEl.style.display = user ? 'none' : 'flex';
             userBarEl.style.display = user ? 'flex' : 'none';
-            if (user) {
-              const roleLabel = user.uid === STOCKAUDIT_MASTER_UID ? 'Master Owner' : 'Signed in';
+            document.getElementById('btn-usersTab')?.classList.toggle('hidden', !user || user.uid !== STOCKAUDIT_MASTER_UID);
+            if (!user) { stockAuditCurrentRole = 'user'; stockAuditCurrentPermissions = { upload: true, edit: true, export: true, clear: false }; return; }
+            try {
+              if (user.uid === STOCKAUDIT_MASTER_UID) {
+                stockAuditCurrentRole = 'owner';
+                stockAuditCurrentPermissions = { upload: true, edit: true, export: true, clear: true };
+              } else {
+                const roleSnap = await stockAuditDb.collection('userRoles').doc(user.uid).get();
+                if (!roleSnap.exists) { alert('Your account is not registered by the Master Owner yet. Contact the owner.'); await stockAuditAuth.signOut(); return; }
+                const roleData = roleSnap.data();
+                if (roleData.active === false) { alert('Your StockAudit Pro access has been disabled. Contact the Master Owner.'); await stockAuditAuth.signOut(); return; }
+                stockAuditCurrentRole = roleData.role || 'user';
+                stockAuditCurrentPermissions = Object.assign({ upload: false, edit: false, export: false, clear: false }, roleData.permissions || {});
+              }
+              const roleLabel = stockAuditCurrentRole === 'owner' ? 'Master Owner' : (stockAuditCurrentRole === 'admin' ? 'Admin' : 'Normal User');
               document.getElementById('firebaseUserLabel').textContent = `${roleLabel} • ${user.email || user.phoneNumber || user.uid}`;
+              applyRolePermissions();
+              await writeActivityLog('login', 'Signed in to StockAudit Pro');
+              if (user.uid === STOCKAUDIT_MASTER_UID) { document.getElementById('userManagementPanel').classList.remove('hidden'); document.getElementById('usersStatus').textContent = 'Master Owner access verified.'; loadManagedUsers(); loadActivityLogs(); }
+            } catch (err) {
+              console.error('Role load failed:', err);
+              document.getElementById('usersStatus').textContent = 'Could not load roles. Check Firestore setup and Security Rules.';
+              // Fail closed for elevated permissions if role data cannot be read.
+              if (user.uid !== STOCKAUDIT_MASTER_UID) { stockAuditCurrentRole = 'user'; stockAuditCurrentPermissions = { upload: false, edit: false, export: true, clear: false }; applyRolePermissions(); }
             }
           });
         }
@@ -608,6 +711,45 @@
         document.getElementById('firebaseLogoutButton').addEventListener('click', async () => {
           if (stockAuditAuth) await stockAuditAuth.signOut();
         });
+        // User roles, permissions, and activity (Firestore). Auth accounts must first be created in Firebase Console.
+        function applyRolePermissions() {
+          const owner = stockAuditCurrentRole === 'owner';
+          document.getElementById('btn-usersTab')?.classList.toggle('hidden', !owner);
+          document.getElementById('excelFileInput')?.closest('#dropArea')?.classList.toggle('opacity-50', !stockAuditCurrentPermissions.upload);
+          const clearBtn = document.querySelector('button[onclick="confirmClearAllData()"]');
+          if (clearBtn) clearBtn.disabled = !stockAuditCurrentPermissions.clear;
+          document.querySelectorAll('button[onclick^="exportToExcel"],button[onclick^="exportToPDF"]').forEach(b => b.disabled = !stockAuditCurrentPermissions.export);
+          document.querySelectorAll('#pvCountTbody input[type="number"],#differenceTbody input[type="number"],#perpetualTbody input[type="number"]').forEach(el => el.disabled = !stockAuditCurrentPermissions.edit);
+        }
+        async function writeActivityLog(action, details) {
+          if (!stockAuditDb || !stockAuditAuth?.currentUser) return;
+          const u = stockAuditAuth.currentUser;
+          try { await stockAuditDb.collection('activityLogs').add({ uid: u.uid, actor: u.email || u.phoneNumber || u.uid, action, details: String(details || '').slice(0, 500), createdAt: firebase.firestore.FieldValue.serverTimestamp() }); }
+          catch (e) { console.warn('Activity log was not saved:', e.message); }
+        }
+        async function loadManagedUsers() {
+          if (stockAuditAuth?.currentUser?.uid !== STOCKAUDIT_MASTER_UID) return;
+          const tbody = document.getElementById('managedUsersTbody');
+          try {
+            const snap = await stockAuditDb.collection('userRoles').get(); tbody.innerHTML = '';
+            const rows = []; snap.forEach(doc => rows.push({ uid: doc.id, ...doc.data() }));
+            if (!rows.some(r => r.uid === STOCKAUDIT_MASTER_UID)) rows.unshift({ uid: STOCKAUDIT_MASTER_UID, email: stockAuditAuth.currentUser.email || 'Master Owner', role: 'owner', active: true, permissions: { upload:true, edit:true, export:true, clear:true } });
+            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="p-3">No users registered yet.</td></tr>'; return; }
+            rows.forEach(r => { const tr=document.createElement('tr'); tr.className='border-t'; const vals=[r.uid,r.email||'',r.role||'user',r.active===false?'Disabled':'Active',Object.entries(r.permissions||{}).filter(x=>x[1]).map(x=>x[0]).join(', ')||'None']; vals.forEach(v=>{const td=document.createElement('td');td.className='p-2 align-top';td.textContent=String(v);tr.appendChild(td);}); const td=document.createElement('td');td.className='p-2'; if(r.uid!==STOCKAUDIT_MASTER_UID){const b=document.createElement('button');b.className='text-blue-700 underline';b.textContent='Edit';b.type='button';b.onclick=()=>{document.getElementById('managedUid').value=r.uid;document.getElementById('managedEmail').value=r.email||'';document.getElementById('managedRole').value=r.role==='admin'?'admin':'user';document.getElementById('managedActive').value=String(r.active!==false);['upload','edit','export','clear'].forEach(k=>document.getElementById('perm'+k[0].toUpperCase()+k.slice(1)).checked=!!(r.permissions||{})[k]);};td.appendChild(b);} else td.textContent='Protected';tr.appendChild(td);tbody.appendChild(tr); });
+          } catch (e) { tbody.innerHTML='<tr><td colspan="6" class="p-3 text-rose-600">Unable to load users. Check Firestore Security Rules.</td></tr>'; console.error(e); }
+        }
+        async function loadActivityLogs() {
+          if (stockAuditAuth?.currentUser?.uid !== STOCKAUDIT_MASTER_UID) return;
+          const tbody=document.getElementById('activityLogsTbody');
+          try { const snap=await stockAuditDb.collection('activityLogs').orderBy('createdAt','desc').limit(100).get(); tbody.innerHTML=''; if(snap.empty){tbody.innerHTML='<tr><td colspan="4" class="p-3">No activity recorded yet.</td></tr>';return;} snap.forEach(doc=>{const d=doc.data();const tr=document.createElement('tr');tr.className='border-t';const when=d.createdAt?.toDate?d.createdAt.toDate().toLocaleString():'Pending';[when,d.actor||d.uid||'',d.action||'',d.details||''].forEach(v=>{const td=document.createElement('td');td.className='p-2 align-top';td.textContent=String(v);tr.appendChild(td);});tbody.appendChild(tr);}); } catch(e) {tbody.innerHTML='<tr><td colspan="4" class="p-3 text-rose-600">Unable to load activity. Check rules and the createdAt index if prompted.</td></tr>';console.error(e);} }
+        document.getElementById('userRoleForm')?.addEventListener('submit', async e => {
+          e.preventDefault(); if(stockAuditAuth?.currentUser?.uid!==STOCKAUDIT_MASTER_UID){showToast('Only Master Owner can manage users.','error');return;}
+          const uid=document.getElementById('managedUid').value.trim(); if(!uid || uid===STOCKAUDIT_MASTER_UID){showToast('Enter a non-owner Firebase Auth UID.','error');return;}
+          const role=document.getElementById('managedRole').value; const active=document.getElementById('managedActive').value==='true';
+          const permissions={upload:document.getElementById('permUpload').checked,edit:document.getElementById('permEdit').checked,export:document.getElementById('permExport').checked,clear:document.getElementById('permClear').checked};
+          try { await stockAuditDb.collection('userRoles').doc(uid).set({email:document.getElementById('managedEmail').value.trim(),role,active,permissions,updatedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedBy:stockAuditAuth.currentUser.uid},{merge:true}); await writeActivityLog('user_role_updated',`UID ${uid}; role=${role}; active=${active}; permissions=${JSON.stringify(permissions)}`); showToast('User role saved.','success'); await loadManagedUsers(); await loadActivityLogs(); } catch(err) {console.error(err);showToast('Could not save role. Check Firestore setup and rules.','error');}
+        });
+
         // Global Application State stored in LocalStorage
         let inventoryData = [];
         let metadata = {
@@ -671,58 +813,160 @@
         }
 
         // Excel / CSV File Upload Handler
+        // Flexible import: supports different column names, different column orders,
+        // and sheets without a header row. Only the fields used by the audit are mapped.
         function handleFileUpload(e) {
-            const file = e.target.files[0];
+            if (!stockAuditCurrentPermissions.upload) {
+                showToast('You do not have permission to upload inventory.', 'error');
+                e.target.value = '';
+                return;
+            }
+            const file = e.target.files && e.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(evt) {
                 try {
                     const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
-                    if (json.length === 0) {
-                        showToast("Excel sheet appears to be empty!", "error");
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    if (!workbook.SheetNames || !workbook.SheetNames.length) {
+                        showToast('No worksheet found in this file.', 'error');
+                        return;
+                    }
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const grid = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false, blankrows: false });
+                    const clean = v => (v === null || v === undefined) ? '' : String(v).trim();
+                    const nonEmpty = row => Array.isArray(row) && row.some(v => clean(v) !== '');
+                    const rows = grid.filter(nonEmpty);
+                    if (!rows.length) {
+                        showToast('Excel sheet appears to be empty!', 'error');
                         return;
                     }
 
-                    // Dynamically Map Columns
-                    const sample = json[0];
-                    const keys = Object.keys(sample);
+                    const norm = v => clean(v).toLowerCase().replace(/[._\-\/\\]+/g, ' ').replace(/\s+/g, ' ').trim();
+                    const codeRe = /^(material ?code|item ?code|item ?no|item ?number|material ?no|material ?number|sku|product ?code|part ?no|part ?number|code|id)$/i;
+                    const nameRe = /(material ?description|item ?description|description|material ?name|item ?name|product ?name|item|material|product|name|title)$/i;
+                    const qtyRe = /(system ?qty|book ?qty|book ?stock|system ?stock|available ?qty|quantity|qty|stock|balance|closing ?stock|closing ?qty)$/i;
+                    const unitRe = /^(uom|unit|unit of measure|pack|measure)$/i;
 
-                    const codeKey = keys.find(k => /code|item|material|sku|id/i.test(k)) || keys[0];
-                    const nameKey = keys.find(k => /desc|name|title|material name/i.test(k)) || keys[1] || keys[0];
-                    const qtyKey = keys.find(k => /qty|quantity|system|book|stock/i.test(k)) || keys[2] || keys[0];
-                    const unitKey = keys.find(k => /unit|uom|pack/i.test(k)) || keys[3] || "";
+                    // Find a plausible header row in the first few rows. If none is found,
+                    // treat the sheet as raw data and do not discard the first data row.
+                    let headerIndex = -1, headerScore = 0;
+                    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+                        const vals = rows[r].map(norm);
+                        let score = 0;
+                        vals.forEach(v => {
+                            if (!v) return;
+                            if (codeRe.test(v)) score += 3;
+                            if (nameRe.test(v)) score += 2;
+                            if (qtyRe.test(v)) score += 3;
+                            if (unitRe.test(v)) score += 1;
+                        });
+                        if (score > headerScore) { headerScore = score; headerIndex = r; }
+                    }
+                    if (headerScore < 3) headerIndex = -1;
 
-                    inventoryData = json.map((row, idx) => ({
-                        id: idx + 1,
-                        code: String(row[codeKey] || '').trim(),
-                        name: String(row[nameKey] || '').trim(),
-                        systemQty: parseFloat(row[qtyKey]) || 0,
-                        unit: String(row[unitKey] || 'Pcs').trim(),
-                        physicalQty: null, // null = pending
-                        remarks: "",
-                        date: ""
-                    }));
+                    let headers, dataRows;
+                    if (headerIndex >= 0) {
+                        headers = rows[headerIndex].map(clean);
+                        dataRows = rows.slice(headerIndex + 1);
+                    } else {
+                        const maxCols = Math.max(...rows.map(r => r.length));
+                        headers = Array.from({ length: maxCols }, (_, i) => `Column ${i + 1}`);
+                        dataRows = rows;
+                    }
+                    dataRows = dataRows.filter(nonEmpty);
+                    if (!dataRows.length) {
+                        showToast('No inventory rows found below the header.', 'error');
+                        return;
+                    }
 
+                    const normalizedHeaders = headers.map(norm);
+                    const findHeader = re => normalizedHeaders.findIndex(h => h && re.test(h));
+                    let codeIdx = findHeader(codeRe);
+                    let nameIdx = findHeader(nameRe);
+                    let qtyIdx = findHeader(qtyRe);
+                    let unitIdx = findHeader(unitRe);
+                    const maxCols = Math.max(headers.length, ...dataRows.map(r => r.length));
+
+                    // Fallbacks for arbitrary/unnamed columns: first non-empty column is
+                    // the item identifier; next distinct text column is the description;
+                    // a numeric-dominant column is used for quantity.
+                    const populated = Array.from({length:maxCols}, (_, c) => ({
+                        c,
+                        vals: dataRows.map(r => clean(r[c])).filter(Boolean)
+                    })).filter(x => x.vals.length);
+                    if (codeIdx < 0) codeIdx = populated.length ? populated[0].c : 0;
+                    if (nameIdx < 0 || nameIdx === codeIdx) {
+                        const candidate = populated.find(x => x.c !== codeIdx && x.vals.some(v => isNaN(Number(v))));
+                        nameIdx = candidate ? candidate.c : (populated.find(x => x.c !== codeIdx)?.c ?? codeIdx);
+                    }
+                    if (qtyIdx < 0) {
+                        let best = null;
+                        populated.forEach(x => {
+                            if (x.c === codeIdx) return;
+                            const numeric = x.vals.filter(v => v !== '' && Number.isFinite(Number(v))).length;
+                            const ratio = numeric / x.vals.length;
+                            if (numeric && (!best || ratio > best.ratio || (ratio === best.ratio && numeric > best.numeric))) {
+                                best = { c: x.c, ratio, numeric };
+                            }
+                        });
+                        qtyIdx = best && best.ratio >= 0.5 ? best.c : -1;
+                    }
+                    if (unitIdx < 0) {
+                        const unitLike = /^(pcs?|pieces?|nos?|numbers?|kg|kgs|g|gm|gram|grams|ltr|litre|liter|litres|liters|m|meter|metre|meters|metres|mm|cm|set|sets|box|boxes|roll|rolls|pair|pairs|pkt|pack|packs)$/i;
+                        const candidate = populated.find(x => x.c !== codeIdx && x.c !== nameIdx && x.c !== qtyIdx && x.vals.some(v => unitLike.test(v)));
+                        unitIdx = candidate ? candidate.c : -1;
+                    }
+
+                    const imported = dataRows.map((row, idx) => {
+                        const get = c => c >= 0 && c < row.length ? clean(row[c]) : '';
+                        const code = get(codeIdx);
+                        const name = get(nameIdx);
+                        const qtyText = get(qtyIdx);
+                        const parsedQty = qtyText === '' ? 0 : Number(String(qtyText).replace(/,/g, ''));
+                        const unit = get(unitIdx);
+                        // Skip completely blank rows and rows with no useful item data.
+                        if (!code && !name && !qtyText) return null;
+                        return {
+                            id: idx + 1,
+                            code: code || name || `ITEM-${idx + 1}`,
+                            name: name || code || `Item ${idx + 1}`,
+                            systemQty: Number.isFinite(parsedQty) ? parsedQty : 0,
+                            unit: unit || 'Pcs',
+                            physicalQty: null,
+                            remarks: '',
+                            date: ''
+                        };
+                    }).filter(Boolean);
+
+                    if (!imported.length) {
+                        showToast('No usable inventory data found. Please check that the sheet contains item rows.', 'error');
+                        return;
+                    }
+                    inventoryData = imported;
                     saveStateToLocalStorage();
                     renderAllViews();
-                    showToast(`Successfully imported ${inventoryData.length} items!`, "success");
-
+                    writeActivityLog('inventory_uploaded', `Imported ${inventoryData.length} inventory rows from ${file.name}`);
+                    showToast(`Successfully imported ${inventoryData.length} items!`, 'success');
                 } catch (err) {
-                    console.error(err);
-                    showToast("Error parsing Excel file. Please ensure valid file format.", "error");
+                    console.error('Excel import error:', err);
+                    showToast('Could not read this file. Please upload a valid .xlsx, .xls or .csv file.', 'error');
+                } finally {
+                    // Allow re-uploading the same file if needed.
+                    e.target.value = '';
                 }
+            };
+            reader.onerror = function() {
+                showToast('Unable to read the selected file.', 'error');
+                e.target.value = '';
             };
             reader.readAsArrayBuffer(file);
         }
 
         // Main Physical Quantity Update Engine
         function updatePhysicalQty(id, value, remarks = null, sourceInput = null) {
+            if (!stockAuditCurrentPermissions.edit) { showToast('You do not have permission to edit counts.','error'); return; }
             const item = inventoryData.find(i => i.id === id);
             if (!item) return;
 
@@ -740,6 +984,7 @@
 
             // Preserve the original save/archive workflow.
             saveStateToLocalStorage();
+            if (hasValue) writeActivityLog('physical_count_saved', `Item ${item.code}; physical quantity ${item.physicalQty}`);
             updateStatsAndBadges();
 
             const activeTab = document.querySelector('.tab-content:not(.hidden)')?.id;
@@ -762,6 +1007,7 @@
 
         // Update Item Remarks
         function updateRemarks(id, remarks) {
+            if (!stockAuditCurrentPermissions.edit) { showToast('You do not have permission to edit remarks.','error'); return; }
             const item = inventoryData.find(i => i.id === id);
             if (item) {
                 item.remarks = remarks;
@@ -1261,11 +1507,13 @@
 
         // Confirm Clear All System Data
         function confirmClearAllData() {
+            if (!stockAuditCurrentPermissions.clear) { showToast('You do not have permission to clear data.','error'); return; }
             if (confirm("Are you sure you want to clear all loaded inventory items and audit counts? This action cannot be undone.")) {
                 inventoryData = [];
                 localStorage.removeItem('inventory_app_data');
                 renderAllViews();
                 showToast("All inventory data wiped clean.", "info");
+                writeActivityLog('inventory_cleared', 'Cleared local inventory data');
             }
         }
 
@@ -1292,6 +1540,7 @@
 
         // Export Functionality: Excel
         function exportToExcel(viewType) {
+            if (!stockAuditCurrentPermissions.export) { showToast('You do not have permission to export reports.','error'); return; }
             let dataToExport = [];
             let fileName = "Inventory_Report.xlsx";
 
@@ -1354,6 +1603,7 @@
 
         // Export Functionality: PDF using jsPDF AutoTable
         function exportToPDF(viewType) {
+            if (!stockAuditCurrentPermissions.export) { showToast('You do not have permission to export reports.','error'); return; }
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
