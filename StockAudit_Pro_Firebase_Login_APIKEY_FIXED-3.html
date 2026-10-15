@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Audit & Physical Verification System</title>
+    <link rel="manifest" href="/Stockaudit-Pro/manifest.json">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase Authentication (compat SDK for this standalone HTML app) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <!-- SheetJS CDN (XLSX) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF & AutoTable CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar for sleek UI */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Sticky header for large tables */
+        .sticky-thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #f8fafc;
+        }
+
+        /* Print Media Styles */
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                font-size: 10pt;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .shadow-md, .shadow-sm, .shadow-lg {
+                box-shadow: none !important;
+            }
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            th, td {
+                border: 1px solid #cbd5e1 !important;
+                padding: 6px 8px !important;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+        .column-filter-menu {
+            position: fixed;
+            z-index: 9999;
+            width: min(290px, calc(100vw - 24px));
+            height: min(420px, calc(100dvh - 24px));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, .22);
+            padding: 12px;
+        }
+        #columnFilterOptions {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        #columnFilterMenuActions { flex: 0 0 auto; background: white; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Firebase login gate: existing inventory interface below is preserved -->
+    <div id="firebaseLoginGate" style="position:fixed;inset:0;z-index:99999;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="width:100%;max-width:420px;background:white;border-radius:18px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.35);">
+        <div style="text-align:center;margin-bottom:22px"><div style="font-size:34px">📦</div><h2 style="font-size:25px;font-weight:800;color:#0f172a;margin:8px 0">StockAudit Pro</h2><p style="color:#64748b;font-size:14px">Sign in to continue</p></div>
+        <form id="firebaseLoginForm" style="display:flex;flex-direction:column;gap:12px">
+          <label for="firebaseEmail" style="font-size:13px;font-weight:700;color:#334155">Email address</label>
+          <input id="firebaseEmail" type="email" autocomplete="username" required placeholder="Enter your registered email" style="padding:12px;border:1px solid #cbd5e1;border-radius:9px;width:100%;box-sizing:border-box;color:#0f172a">
+          <label for="firebasePassword" style="font-size:13px;font-weight:700;color:#334155">Password</label>
+          <input id="firebasePassword" type="password" autocomplete="current-password" required placeholder="Enter password" style="padding:12px;border:1px solid #cbd5e1;border-radius:9px;width:100%;box-sizing:border-box;color:#0f172a">
+          <button id="firebaseLoginButton" type="submit" style="padding:12px;background:#2563eb;color:white;border:0;border-radius:9px;font-weight:700;margin-top:5px;cursor:pointer">Sign in</button>
+          <button id="firebaseResetButton" type="button" style="padding:8px;background:transparent;color:#2563eb;border:0;font-weight:600;cursor:pointer">Forgot password?</button>
+          <p id="firebaseLoginMessage" role="status" style="font-size:13px;color:#b91c1c;min-height:18px;margin:0"></p>
+        </form>
+      </div>
+    </div>
+    <div id="firebaseUserBar" class="no-print" style="display:none;position:fixed;z-index:9998;right:10px;top:10px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:7px 10px;box-shadow:0 4px 14px #0002;font-size:12px;align-items:center;gap:8px;max-width:calc(100vw - 20px)">
+      <span id="firebaseUserLabel" style="color:#334155;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button id="firebaseLogoutButton" type="button" style="background:#dc2626;color:#fff;border:0;border-radius:6px;padding:6px 9px;font-weight:700;cursor:pointer">Log out</button>
+    </div>
+
+    <!-- Print Header (Visible only when printing) -->
+    <div class="print-only p-4 border-b border-slate-300 mb-4">
+        <h1 class="text-2xl font-bold text-center uppercase" id="printCompanyName">COMPANY NAME</h1>
+        <div class="flex justify-between text-xs mt-2 text-slate-600">
+            <p><strong>Plant Code:</strong> <span id="printPlantCode">N/A</span></p>
+            <p><strong>Project:</strong> <span id="printProjectName">N/A</span></p>
+            <p><strong>Print Date:</strong> <span id="printDate"></span></p>
+        </div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <header class="bg-slate-900 text-white shadow-lg no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white">
+                        <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight">StockAudit Pro</h1>
+                        <p class="text-xs text-slate-400">Inventory Verification & Audit Suite</p>
+                    </div>
+                </div>
+
+                <!-- Header Metadata Summary Display -->
+                <div class="hidden md:flex items-center space-x-6 text-sm bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
+                    <div>
+                        <span class="text-slate-400 text-xs block">Company</span>
+                        <span id="headerCompany" class="font-semibold text-slate-200">Not Set</span>
+                    </div>
+                    <div class="border-l border-slate-700 h-6"></div>
+                    <div>
+                        <span class="text-slate-400 text-xs block">Plant Code</span>
+                        <span id="headerPlant" class="font-semibold text-slate-200">Not Set</span>
+                    </div>
+                    <div class="border-l border-slate-700 h-6"></div>
+                    <div>
+                        <span class="text-slate-400 text-xs block">Project</span>
+                        <span id="headerProject" class="font-semibold text-slate-200">Not Set</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="bg-slate-800 border-t border-slate-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav class="flex space-x-1 sm:space-x-4 overflow-x-auto py-2" id="navigationTabs">
+                    <button onclick="switchTab('uploadTab')" id="btn-uploadTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 flex items-center space-x-2 bg-blue-600 text-white">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>PV Upload & Settings</span>
+                    </button>
+                    <button onclick="switchTab('pvCountTab')" id="btn-pvCountTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-list-check"></i>
+                        <span>PV Count (Pending)</span>
+                        <span id="pendingBadge" class="ml-1 px-2 py-0.5 text-xs bg-amber-500 text-slate-950 font-bold rounded-full">0</span>
+                    </button>
+                    <button onclick="switchTab('differenceTab')" id="btn-differenceTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Difference List</span>
+                        <span id="diffBadge" class="ml-1 px-2 py-0.5 text-xs bg-rose-500 text-white font-bold rounded-full">0</span>
+                    </button>
+                    <button onclick="switchTab('perpetualTab')" id="btn-perpetualTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-layer-group"></i>
+                        <span>Perpetual Counting</span>
+                    </button>
+                    <button onclick="switchTab('archiveTab')" id="btn-archiveTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-box-archive"></i>
+                        <span>Date Archive</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- App Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- TAB 1: PV UPLOAD & SETTINGS -->
+        <section id="uploadTab" class="tab-content space-y-6">
+            <!-- Settings Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                    <i class="fa-solid fa-sliders text-blue-600 mr-2"></i> Organization & Audit Header Settings
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Company Name</label>
+                        <input type="text" id="inputCompany" placeholder="e.g. Acme Logistics Corp" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" oninput="saveMetadata()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Plant / Store Code</label>
+                        <input type="text" id="inputPlant" placeholder="e.g. PLANT-04 / WH-A" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" oninput="saveMetadata()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Project / Audit Name</label>
+                        <input type="text" id="inputProject" placeholder="e.g. Q4 Stock Verification 2026" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" oninput="saveMetadata()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload File Box -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                    <i class="fa-solid fa-file-excel text-emerald-600 mr-2"></i> Upload Inventory Master File
+                </h2>
+                
+                <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative" id="dropArea">
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="handleFileUpload(event)">
+                    <div class="space-y-3 pointer-events-none">
+                        <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-100 text-blue-600">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-700">Click or Drag & Drop Excel/CSV file here</p>
+                        <p class="text-xs text-slate-500">Supports .XLSX, .XLS, .CSV files</p>
+                    </div>
+                </div>
+
+                <!-- Mapping Notice / Instructions -->
+                <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-start space-x-3">
+                    <i class="fa-solid fa-circle-info text-blue-600 text-base mt-0.5"></i>
+                    <div>
+                        <p class="font-semibold mb-1">Expected Excel Columns:</p>
+                        <p class="text-blue-700">The file should contain columns such as <strong>Item Code / Material</strong>, <strong>Item Description / Name</strong>, <strong>System Qty / Book Qty</strong>, and <strong>Unit / UOM</strong>. The system will automatically detect these or map closest matches.</p>
+                    </div>
+                </div>
+
+                <!-- System Stats & Clear Data Button -->
+                <div class="mt-6 flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200">
+                    <div class="flex items-center space-x-6 text-sm">
+                        <div>
+                            <span class="text-slate-500">Total Loaded Items:</span>
+                            <span id="statTotalLoaded" class="font-bold text-slate-800 ml-1">0</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500">Verified Items:</span>
+                            <span id="statVerifiedCount" class="font-bold text-emerald-600 ml-1">0</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500">Pending Items:</span>
+                            <span id="statPendingCount" class="font-bold text-amber-600 ml-1">0</span>
+                        </div>
+                    </div>
+
+                    <button onclick="confirmClearAllData()" class="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg text-sm font-semibold transition-colors flex items-center space-x-2">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Clear All System Data</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: PV COUNT (PENDING ITEMS ONLY) -->
+        <section id="pvCountTab" class="tab-content hidden space-y-4">
+            <!-- Toolbar -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-list-check text-amber-500 mr-2"></i> Physical Verification Count (Pending Items)
+                    </h2>
+                    <p class="text-xs text-slate-500">Items automatically disappear from this list once Physical Quantity is entered.</p>
+                </div>
+
+                <div class="flex items-center space-x-2 no-print">
+                    <button onclick="exportToExcel('pvCount')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Excel</span>
+                    </button>
+                    <button onclick="exportToPDF('pvCount')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>PDF</span>
+                    </button>
+                    <button onclick="window.print()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-print"></i>
+                        <span>Print</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto max-h-[650px]">
+                    <table class="w-full text-left text-xs border-collapse sticky-thead" id="tablePvCount">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">#</th>
+                                <th class="p-3">Item Code</th>
+                                <th class="p-3">Item Name / Description</th>
+                                <th class="p-3 text-right">System Qty</th>
+                                <th class="p-3">Unit</th>
+                                <th class="p-3 text-center w-36">Physical Qty (Count)</th>
+                                <th class="p-3">Remarks / Notes</th>
+                                <th class="p-3 text-center">Status</th>
+                            </tr>
+                            <!-- Excel-style searchable dropdown filters -->
+                            <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 no-print">
+                                <td class="p-1"></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',1,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',2,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',3,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Qty</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',4,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Unit</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',5,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Physical Qty</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',6,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Filter</span><i class="fa-solid fa-filter"></i></button></td>
+                                <td class="p-1"><button type="button" onclick="openColumnFilter('tablePvCount',7,this)" class="w-full px-2 py-2 text-xs border rounded bg-white flex items-center justify-between gap-1"><span>Status</span><i class="fa-solid fa-filter"></i></button></td>
+                            </tr>
+                        </thead>
+                        <tbody id="pvCountTbody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: DIFFERENCE LIST (STRICT NON-ZERO DIFFERENCE ONLY) -->
+        <section id="differenceTab" class="tab-content hidden space-y-4">
+            <!-- Toolbar -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-500 mr-2"></i> Inventory Difference & Variance Report
+                    </h2>
+                    <p class="text-xs text-slate-500">Shows ONLY items with entered physical count where Difference ≠ 0. If Difference becomes 0, it automatically disappears.</p>
+                </div>
+
+                <div class="flex items-center space-x-2 no-print">
+                    <button onclick="exportToExcel('difference')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Excel</span>
+                    </button>
+                    <button onclick="exportToPDF('difference')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span>PDF</span>
+                    </button>
+                    <button onclick="window.print()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors">
+                        <i class="fa-solid fa-print"></i>
+                        <span>Print</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto max-h-[650px]">
+                    <table class="w-full text-left text-xs border-collapse sticky-thead" id="tableDifference">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">#</th>
+                                <th class="p-3">Item Code</th>
+                                <th class="p-3">Item Name</th>
+                                <th class="p-3 text-right">System Qty</th>
+                                <th class="p-3 text-center w-32">Physical Qty</th>
+                                <th class="p-3 text-right">Difference</th>
+                                <th class="p-3">Unit</th>
+                                <th class="p-3">Remarks</th>
+                                <th class="p-3 text-center">Variance Type</th>
+                            </tr>
+                            <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 no-print">
+                                <td class="p-1"></td>
+                                <td class="p-1"><input type="text" oninput="applyTableFilter('tableDifference', 1, this.value)" placeholder="Filter..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"><input type="text" oninput="applyTableFilter('tableDifference', 2, this.value)" placeholder="Filter..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"></td>
+                                <td class="p-1"></td>
+                                <td class="p-1"></td>
+                                <td class="p-1"></td>
+                                <td class="p-1"><input type="text" oninput="applyTableFilter('tableDifference', 7, this.value)" placeholder="Filter..." class="w-full p-1 text-xs border rounded bg-white"></td>
+                                <td class="p-1"></td>
+                            </tr>
+                        </thead>
+                        <tbody id="differenceTbody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: PERPETUAL COUNTING (BATCHWISE) -->
+        <section id="perpetualTab" class="tab-content hidden space-y-4">
+            <!-- Batch Controls & Date Selector -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-layer-group text-blue-600 mr-2"></i> Perpetual Inventory Batch Verification
+                        </h2>
+                        <p class="text-xs text-slate-500">Perform quick batch verification and explicitly tag the verification date.</p>
+                    </div>
+
+                    <!-- Date Selection Input -->
+                    <div class="flex items-center space-x-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <label class="text-xs font-semibold text-slate-600 flex items-center">
+                            <i class="fa-regular fa-calendar mr-1 text-blue-600"></i> Verification Date:
+                        </label>
+                        <input type="date" id="perpetualDateInput" class="text-xs font-semibold px-2 py-1 border border-slate-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Batch Size Selector Buttons -->
+                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                    <span class="text-xs text-slate-500 font-medium mr-2">Select Batch Size:</span>
+                    <button onclick="loadPerpetualBatch(30)" class="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors">
+                        Batch 30 Items
+                    </button>
+                    <button onclick="loadPerpetualBatch(50)" class="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors">
+                        Batch 50 Items
+                    </button>
+                    <button onclick="loadPerpetualBatch(100)" class="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors">
+                        Batch 100 Items
+                    </button>
+                    
+                    <div class="ml-auto flex items-center space-x-2 no-print">
+                        <button onclick="exportToExcel('perpetual')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-file-excel mr-1"></i> Excel
+                        </button>
+                        <button onclick="exportToPDF('perpetual')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-file-pdf mr-1"></i> PDF
+                        </button>
+                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-print mr-1"></i> Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto max-h-[600px]">
+                    <table class="w-full text-left text-xs border-collapse sticky-thead" id="tablePerpetual">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">#</th>
+                                <th class="p-3">Item Code</th>
+                                <th class="p-3">Item Name</th>
+                                <th class="p-3 text-right">System Qty</th>
+                                <th class="p-3 text-center w-36">Physical Qty</th>
+                                <th class="p-3 text-right">Difference</th>
+                                <th class="p-3">Unit</th>
+                                <th class="p-3">Remarks</th>
+                                <th class="p-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="perpetualTbody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: DATE ARCHIVE & AUDIT HISTORY -->
+        <section id="archiveTab" class="tab-content hidden space-y-4">
+            <!-- Controls -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-box-archive text-purple-600 mr-2"></i> Date-Wise Audit Archive
+                    </h2>
+                    <p class="text-xs text-slate-500">Filter and audit records completed on specific calendar dates.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="text-xs font-semibold text-slate-600">Select Date:</label>
+                    <input type="date" id="archiveDateSelect" onchange="loadArchiveByDate()" class="text-xs font-semibold px-3 py-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <input type="search" id="archiveSearchInput" oninput="applyArchiveSearch()" placeholder="Search code, name, unit..." class="text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white w-44 max-w-full">
+                    <button type="button" onclick="openColumnFilter('tableArchive',1,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Item Code</button>
+                    <button type="button" onclick="openColumnFilter('tableArchive',3,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter System Qty</button>
+                    <button type="button" onclick="openColumnFilter('tableArchive',4,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Physical Qty</button>
+                    <button type="button" onclick="openColumnFilter('tableArchive',6,this)" class="px-3 py-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-lg text-xs font-semibold"><i class="fa-solid fa-filter mr-1"></i> Filter Unit</button>
+
+                    <div class="flex items-center space-x-2 no-print ml-4">
+                        <button onclick="exportToExcel('archive')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-file-excel mr-1"></i> Excel
+                        </button>
+                        <button onclick="exportToPDF('archive')" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-file-pdf mr-1"></i> PDF
+                        </button>
+                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-print mr-1"></i> Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Archive Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto max-h-[600px]">
+                    <table class="w-full text-left text-xs border-collapse sticky-thead" id="tableArchive">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">#</th>
+                                <th class="p-3">Item Code</th>
+                                <th class="p-3">Item Name</th>
+                                <th class="p-3 text-right">System Qty</th>
+                                <th class="p-3 text-center w-36">Physical Qty</th>
+                                <th class="p-3 text-right">Difference</th>
+                                <th class="p-3">Unit</th>
+                                <th class="p-3">Verification Date</th>
+                                <th class="p-3">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="archiveTbody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Archive Rows Loaded JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Custom Floating Toast Alert Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs transform transition-all duration-300 translate-y-20 opacity-0 z-50">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+        <span id="toastMsg">Message text here</span>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+
+    <div id="columnFilterMenu" class="column-filter-menu hidden" role="dialog" aria-label="Column filter">
+        <div class="flex items-center justify-between gap-2 mb-2">
+            <strong id="columnFilterTitle" class="text-sm">Filter</strong>
+            <button type="button" onclick="closeColumnFilter()" class="p-1 text-slate-500" aria-label="Close filter"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <input id="columnFilterSearch" type="search" placeholder="Search values..." class="w-full p-2 text-sm border rounded mb-2" oninput="handleColumnFilterSearch()">
+        <div class="flex flex-wrap gap-2 mb-2">
+            <button type="button" onclick="sortActiveColumn('asc')" class="text-xs text-blue-700 underline">Sort A to Z</button>
+            <button type="button" onclick="sortActiveColumn('desc')" class="text-xs text-blue-700 underline">Sort Z to A</button>
+            <button type="button" onclick="selectAllColumnFilterOptions(true)" class="text-xs text-blue-700 underline">Select all</button>
+            <button type="button" onclick="selectAllColumnFilterOptions(false)" class="text-xs text-blue-700 underline">Clear all</button>
+        </div>
+        <div id="columnFilterOptions" class="space-y-1 text-sm"></div>
+        <div id="columnFilterMenuActions" class="flex gap-2 mt-3 pt-2 border-t">
+            <button type="button" onclick="applyColumnFilterSelection()" class="flex-1 px-3 py-2 rounded bg-blue-600 text-white text-sm">Apply</button>
+            <button type="button" onclick="clearColumnFilterSelection()" class="px-3 py-2 rounded border text-sm">Clear</button>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Authentication configuration for StockAudit Pro
+        const stockAuditFirebaseConfig = {
+          apiKey: "AIzaSyDEF8VWUbg_8Rj7QR2RcrgQDGqTC0ODxzU",
+          authDomain: "stockaudit-pro-7677e.firebaseapp.com",
+          projectId: "stockaudit-pro-7677e",
+          storageBucket: "stockaudit-pro-7677e.firebasestorage.app",
+          messagingSenderId: "629314131631",
+          appId: "1:629314131631:web:9ed0b7d10c349a2b0c665a",
+          measurementId: "G-JWZQR34RS6"
+        };
+        const STOCKAUDIT_MASTER_UID = "8NEStfygyaTFhyPQ1oYWAMdotvx2";
+        let stockAuditAuth = null;
+        try {
+          if (!firebase.apps.length) firebase.initializeApp(stockAuditFirebaseConfig);
+          stockAuditAuth = firebase.auth();
+        } catch (e) {
+          console.error('Firebase initialization error:', e);
+          const msg = document.getElementById('firebaseLoginMessage');
+          if (msg) msg.textContent = 'Firebase could not start. Check internet connection and Firebase configuration.';
+        }
+        const loginGateEl = document.getElementById('firebaseLoginGate');
+        const userBarEl = document.getElementById('firebaseUserBar');
+        const loginMessageEl = document.getElementById('firebaseLoginMessage');
+        const loginButtonEl = document.getElementById('firebaseLoginButton');
+        if (stockAuditAuth) {
+          stockAuditAuth.onAuthStateChanged(user => {
+            loginGateEl.style.display = user ? 'none' : 'flex';
+            userBarEl.style.display = user ? 'flex' : 'none';
+            if (user) {
+              const roleLabel = user.uid === STOCKAUDIT_MASTER_UID ? 'Master Owner' : 'Signed in';
+              document.getElementById('firebaseUserLabel').textContent = `${roleLabel} • ${user.email || user.uid}`;
+            }
+          });
+        }
+        document.getElementById('firebaseLoginForm').addEventListener('submit', async e => {
+          e.preventDefault();
+          if (!stockAuditAuth) { loginMessageEl.textContent = 'Firebase is not initialized. Refresh and try again.'; return; }
+          loginMessageEl.style.color = '#b91c1c';
+          loginMessageEl.textContent = '';
+          loginButtonEl.disabled = true;
+          loginButtonEl.textContent = 'Signing in…';
+          try {
+            const email = document.getElementById('firebaseEmail').value.trim();
+            const password = document.getElementById('firebasePassword').value;
+            await stockAuditAuth.signInWithEmailAndPassword(email, password);
+          } catch (err) {
+            const messages = {
+              'auth/invalid-credential': 'Email or password is incorrect.',
+              'auth/user-not-found': 'No account found for this email.',
+              'auth/wrong-password': 'Password is incorrect.',
+              'auth/too-many-requests': 'Too many attempts. Wait a while and try again.',
+              'auth/network-request-failed': 'Network error. Check your internet connection.'
+            };
+            loginMessageEl.textContent = messages[err.code] || (err.message || 'Sign-in failed. Please try again.');
+          } finally {
+            loginButtonEl.disabled = false;
+            loginButtonEl.textContent = 'Sign in';
+          }
+        });
+        document.getElementById('firebaseResetButton').addEventListener('click', async () => {
+          const email = document.getElementById('firebaseEmail').value.trim();
+          if (!email) { loginMessageEl.textContent = 'Enter your email address first.'; return; }
+          try {
+            await stockAuditAuth.sendPasswordResetEmail(email);
+            loginMessageEl.style.color = '#047857';
+            loginMessageEl.textContent = 'Password reset email sent. Check your inbox.';
+          } catch (err) {
+            loginMessageEl.style.color = '#b91c1c';
+            loginMessageEl.textContent = err.message || 'Could not send reset email.';
+          }
+        });
+        document.getElementById('firebaseLogoutButton').addEventListener('click', async () => {
+          if (stockAuditAuth) await stockAuditAuth.signOut();
+        });
+        // Global Application State stored in LocalStorage
+        let inventoryData = [];
+        let metadata = {
+            company: "",
+            plant: "",
+            project: ""
+        };
+
+        // Initialize Application on Window Load
+        window.onload = function() {
+            // Set Today's Date in Date Inputs
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('perpetualDateInput').value = today;
+            document.getElementById('archiveDateSelect').value = today;
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString();
+
+            // Load saved state from LocalStorage
+            loadStateFromLocalStorage();
+
+            // Render active view
+            renderAllViews();
+        };
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+            activeBtn.classList.add('bg-blue-600', 'text-white');
+
+            // Refresh tab views if necessary
+            if (tabId === 'pvCountTab') renderPvCountTable();
+            if (tabId === 'differenceTab') renderDifferenceTable();
+            if (tabId === 'perpetualTab') loadPerpetualBatch(30);
+            if (tabId === 'archiveTab') loadArchiveByDate();
+        }
+
+        // Save Header Metadata
+        function saveMetadata() {
+            metadata.company = document.getElementById('inputCompany').value;
+            metadata.plant = document.getElementById('inputPlant').value;
+            metadata.project = document.getElementById('inputProject').value;
+
+            // Sync Header UI
+            document.getElementById('headerCompany').innerText = metadata.company || 'Not Set';
+            document.getElementById('headerPlant').innerText = metadata.plant || 'Not Set';
+            document.getElementById('headerProject').innerText = metadata.project || 'Not Set';
+
+            // Sync Print UI
+            document.getElementById('printCompanyName').innerText = metadata.company || 'INVENTORY PHYSICAL VERIFICATION REPORT';
+            document.getElementById('printPlantCode').innerText = metadata.plant || 'N/A';
+            document.getElementById('printProjectName').innerText = metadata.project || 'N/A';
+
+            saveStateToLocalStorage();
+        }
+
+        // Excel / CSV File Upload Handler
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (json.length === 0) {
+                        showToast("Excel sheet appears to be empty!", "error");
+                        return;
+                    }
+
+                    // Dynamically Map Columns
+                    const sample = json[0];
+                    const keys = Object.keys(sample);
+
+                    const codeKey = keys.find(k => /code|item|material|sku|id/i.test(k)) || keys[0];
+                    const nameKey = keys.find(k => /desc|name|title|material name/i.test(k)) || keys[1] || keys[0];
+                    const qtyKey = keys.find(k => /qty|quantity|system|book|stock/i.test(k)) || keys[2] || keys[0];
+                    const unitKey = keys.find(k => /unit|uom|pack/i.test(k)) || keys[3] || "";
+
+                    inventoryData = json.map((row, idx) => ({
+                        id: idx + 1,
+                        code: String(row[codeKey] || '').trim(),
+                        name: String(row[nameKey] || '').trim(),
+                        systemQty: parseFloat(row[qtyKey]) || 0,
+                        unit: String(row[unitKey] || 'Pcs').trim(),
+                        physicalQty: null, // null = pending
+                        remarks: "",
+                        date: ""
+                    }));
+
+                    saveStateToLocalStorage();
+                    renderAllViews();
+                    showToast(`Successfully imported ${inventoryData.length} items!`, "success");
+
+                } catch (err) {
+                    console.error(err);
+                    showToast("Error parsing Excel file. Please ensure valid file format.", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Main Physical Quantity Update Engine
+        function updatePhysicalQty(id, value, remarks = null, sourceInput = null) {
+            const item = inventoryData.find(i => i.id === id);
+            if (!item) return;
+
+            const selectedDate = document.getElementById('perpetualDateInput')?.value || new Date().toISOString().split('T')[0];
+            const hasValue = value !== "" && value !== null && value !== undefined;
+            if (!hasValue) {
+                item.physicalQty = null;
+            } else {
+                const parsedValue = parseFloat(value);
+                if (!Number.isFinite(parsedValue)) return;
+                item.physicalQty = parsedValue;
+                item.date = selectedDate;
+            }
+            if (remarks !== null) item.remarks = remarks;
+
+            // Preserve the original save/archive workflow.
+            saveStateToLocalStorage();
+            updateStatsAndBadges();
+
+            const activeTab = document.querySelector('.tab-content:not(.hidden)')?.id;
+            // If this edit came from a PV Count row, remove that row immediately after the
+            // quantity is committed. Do not re-render the table, as that closes Android's keyboard.
+            const pvRow = sourceInput?.closest('#pvCountTbody tr');
+            if (pvRow && hasValue) {
+                pvRow.style.display = 'none';
+                pvRow.dataset.pvCompleted = 'true';
+            }
+
+            if (activeTab === 'pvCountTab') {
+                reapplySavedDropdownFilters('tablePvCount');
+            } else if (activeTab === 'differenceTab') {
+                renderDifferenceTable();
+            } else if (activeTab === 'archiveTab') {
+                loadArchiveByDate();
+            }
+        }
+
+        // Update Item Remarks
+        function updateRemarks(id, remarks) {
+            const item = inventoryData.find(i => i.id === id);
+            if (item) {
+                item.remarks = remarks;
+                saveStateToLocalStorage();
+            }
+        }
+
+        // Render Tab 2: PV Count Table (Shows ONLY Pending Items)
+        function renderPvCountTable() {
+            const tbody = document.getElementById('pvCountTbody');
+            tbody.innerHTML = '';
+
+            // Strict Filter: Only items where physicalQty === null
+            const pendingItems = inventoryData.filter(item => item.physicalQty === null || item.physicalQty === undefined || item.physicalQty === "");
+
+            if (pendingItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400 font-medium">All items have been counted & verified! 🎉</td></tr>`;
+                return;
+            }
+
+            pendingItems.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
+                    <td class="p-3 font-semibold text-slate-800">${item.code}</td>
+                    <td class="p-3 text-slate-700">${item.name}</td>
+                    <td class="p-3 text-right font-medium text-slate-900">${item.systemQty}</td>
+                    <td class="p-3 text-slate-500">${item.unit}</td>
+                    <td class="p-3 text-center">
+                        <input type="number" 
+                               placeholder="Enter Qty"
+                               class="w-28 px-2 py-1 text-center font-semibold border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 bg-amber-50/50 focus:bg-white text-slate-900 outline-none"
+                               inputmode="decimal"
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)"
+                               onkeydown="if(event.key===\'Enter\') { event.preventDefault(); updatePhysicalQty(${item.id}, this.value, null, this); const inputs=Array.from(document.querySelectorAll('#pvCountTbody input[type=number]')).filter(el=>el.closest('tr') && el.closest('tr').style.display!=='none'); if(inputs[0]) inputs[0].focus({preventScroll:true}); }">
+                    </td>
+                    <td class="p-3">
+                        <input type="text" 
+                               value="${item.remarks}" 
+                               placeholder="Add note..."
+                               class="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:border-slate-400"
+                               onchange="updateRemarks(${item.id}, this.value)">
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full">PENDING</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+                    reapplySavedDropdownFilters('tablePvCount');
+        }
+
+        // Render Tab 3: Difference List (Strict Non-Zero Difference Only)
+        function renderDifferenceTable() {
+            const tbody = document.getElementById('differenceTbody');
+            tbody.innerHTML = '';
+
+            // Strict Filter: Physical Qty entered AND Difference != 0
+            const diffItems = inventoryData.filter(item => {
+                if (item.physicalQty === null) return false;
+                const diff = item.physicalQty - item.systemQty;
+                return diff !== 0;
+            });
+
+            if (diffItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-emerald-600 font-medium"><i class="fa-solid fa-circle-check text-xl mb-1 block"></i> No inventory variances found! (All counted items match system qty).</td></tr>`;
+                return;
+            }
+
+            diffItems.forEach((item, index) => {
+                const diff = item.physicalQty - item.systemQty;
+                const diffClass = diff < 0 ? 'text-rose-600 font-bold' : 'text-blue-600 font-bold';
+                const badge = diff < 0 ? 
+                    `<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded-full">SHORTAGE</span>` :
+                    `<span class="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full">SURPLUS</span>`;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
+                    <td class="p-3 font-semibold text-slate-800">${item.code}</td>
+                    <td class="p-3 text-slate-700">${item.name}</td>
+                    <td class="p-3 text-right font-medium text-slate-900">${item.systemQty}</td>
+                    <td class="p-3 text-center">
+                        <input type="number" 
+                               value="${item.physicalQty}" 
+                               class="w-24 px-2 py-1 text-center font-semibold border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 outline-none"
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
+                    </td>
+                    <td class="p-3 text-right ${diffClass}">${diff > 0 ? '+' + diff : diff}</td>
+                    <td class="p-3 text-slate-500">${item.unit}</td>
+                    <td class="p-3">
+                        <input type="text" 
+                               value="${item.remarks}" 
+                               placeholder="Add reason..."
+                               class="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:border-slate-400"
+                               onchange="updateRemarks(${item.id}, this.value)">
+                    </td>
+                    <td class="p-3 text-center">${badge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render Tab 4: Perpetual Batch Counting
+        function loadPerpetualBatch(batchSize) {
+            const tbody = document.getElementById('perpetualTbody');
+            tbody.innerHTML = '';
+
+            const batchItems = inventoryData.slice(0, batchSize);
+
+            if (batchItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400">No inventory items available to display. Please upload an Excel sheet.</td></tr>`;
+                return;
+            }
+
+            batchItems.forEach((item, index) => {
+                const diff = item.physicalQty !== null ? item.physicalQty - item.systemQty : '-';
+                const statusBadge = item.physicalQty === null ? 
+                    `<span class="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full">UNCOUNTED</span>` :
+                    (diff === 0 ? `<span class="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full">MATCHED</span>` :
+                    `<span class="px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-700 rounded-full">VARIANCE</span>`);
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
+                    <td class="p-3 font-semibold text-slate-800">${item.code}</td>
+                    <td class="p-3 text-slate-700">${item.name}</td>
+                    <td class="p-3 text-right font-medium text-slate-900">${item.systemQty}</td>
+                    <td class="p-3 text-center">
+                        <input type="number" 
+                               value="${item.physicalQty !== null ? item.physicalQty : ''}" 
+                               placeholder="Count..."
+                               class="w-24 px-2 py-1 text-center font-semibold border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 outline-none"
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
+                    </td>
+                    <td class="p-3 text-right font-semibold text-slate-800">${diff}</td>
+                    <td class="p-3 text-slate-500">${item.unit}</td>
+                    <td class="p-3">
+                        <input type="text" 
+                               value="${item.remarks}" 
+                               placeholder="Notes..."
+                               class="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none"
+                               onchange="updateRemarks(${item.id}, this.value)">
+                    </td>
+                    <td class="p-3 text-center">${statusBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render Tab 5: Date Archive & Audit History
+        function loadArchiveByDate() {
+            const selectedDate = document.getElementById('archiveDateSelect').value;
+            const tbody = document.getElementById('archiveTbody');
+            tbody.innerHTML = '';
+
+            if (!selectedDate) return;
+
+            const archivedItems = inventoryData.filter(item => item.physicalQty !== null && item.date === selectedDate);
+
+            if (archivedItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400">No physical counts recorded for ${selectedDate}.</td></tr>`;
+                return;
+            }
+
+            archivedItems.forEach((item, index) => {
+                const diff = item.physicalQty - item.systemQty;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-400 font-medium">${index + 1}</td>
+                    <td class="p-3 font-semibold text-slate-800">${item.code}</td>
+                    <td class="p-3 text-slate-700">${item.name}</td>
+                    <td class="p-3 text-right font-medium text-slate-900">${item.systemQty}</td>
+                    <td class="p-3 text-center">
+                        <input type="number" 
+                               value="${item.physicalQty}" 
+                               class="w-24 px-2 py-1 text-center font-semibold border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 bg-purple-50/50 text-slate-900 outline-none"
+                               onchange="updatePhysicalQty(${item.id}, this.value, null, this)">
+                    </td>
+                    <td class="p-3 text-right font-bold ${diff !== 0 ? 'text-rose-600' : 'text-emerald-600'}">${diff}</td>
+                    <td class="p-3 text-slate-500">${item.unit}</td>
+                    <td class="p-3 font-medium text-slate-600">${item.date}</td>
+                    <td class="p-3">
+                        <input type="text" 
+                               value="${item.remarks}" 
+                               class="w-full px-2 py-1 text-xs border border-slate-200 rounded"
+                               onchange="updateRemarks(${item.id}, this.value)">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            if (typeof applyArchiveSearch === 'function') applyArchiveSearch();
+        }
+
+
+        // Search all visible fields in the Date Archive while respecting the Unit dropdown filter.
+        function applyArchiveSearch() {
+            const query = (document.getElementById('archiveSearchInput')?.value || '').trim().toLowerCase();
+            const table = document.getElementById('tableArchive');
+            if (!table) return;
+            table.querySelectorAll('tbody tr').forEach(row => {
+                if (row.cells.length < 2) return;
+                const textMatches = !query || row.textContent.toLowerCase().includes(query);
+                const saved = columnFilterSelections?.tableArchive || {};
+                const columnsMatch = Object.keys(saved).every(colText => {
+                    const selected = saved[colText];
+                    if (!selected || !selected.__userApplied) return true;
+                    return selected.has((row.cells[Number(colText)]?.textContent || '').trim());
+                });
+                row.style.display = textMatches && columnsMatch ? '' : 'none';
+            });
+        }
+
+        // Excel-style searchable column filters (PV Count and Date Archive)
+        let activeColumnFilter = null;
+        const columnFilterSelections = {};
+        const COLUMN_FILTER_STORAGE_KEY = 'stockAuditColumnFiltersV1';
+
+        function loadSavedColumnFilters() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(COLUMN_FILTER_STORAGE_KEY) || '{}');
+                Object.keys(saved).forEach(tableId => {
+                    columnFilterSelections[tableId] = columnFilterSelections[tableId] || {};
+                    Object.keys(saved[tableId] || {}).forEach(col => {
+                        columnFilterSelections[tableId][col] = new Set(saved[tableId][col]);
+                        columnFilterSelections[tableId][col].__userApplied = true;
+                    });
+                });
+            } catch (e) { console.warn('Could not load saved column filters', e); }
+        }
+
+        function saveColumnFilters() {
+            try {
+                const serializable = {};
+                Object.keys(columnFilterSelections).forEach(tableId => {
+                    serializable[tableId] = {};
+                    Object.keys(columnFilterSelections[tableId]).forEach(col => {
+                        const set = columnFilterSelections[tableId][col];
+                        if (set && set.__userApplied) serializable[tableId][col] = [...set];
+                    });
+                });
+                localStorage.setItem(COLUMN_FILTER_STORAGE_KEY, JSON.stringify(serializable));
+            } catch (e) { console.warn('Could not save column filters', e); }
+        }
+
+        function reapplySavedDropdownFilters(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            const saved = columnFilterSelections[tableId] || {};
+            // All applied column filters must match (AND logic). Do not let a later
+            // column overwrite the visibility result from an earlier column.
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const matchesAll = Object.keys(saved).every(colText => {
+                    const selected = saved[colText];
+                    if (!selected || !selected.__userApplied) return true;
+                    const colIndex = Number(colText);
+                    const value = (row.cells[colIndex]?.textContent || '').trim();
+                    return [...selected].some(item => String(item).trim().toLocaleLowerCase() === value.toLocaleLowerCase());
+                });
+                row.style.display = matchesAll ? '' : 'none';
+            });
+            if (tableId === 'tableArchive') applyArchiveSearch();
+        }
+
+        loadSavedColumnFilters();
+
+        function openColumnFilter(tableId, colIndex, button) {
+            const table = document.getElementById(tableId);
+            const menu = document.getElementById('columnFilterMenu');
+            if (!table || !menu) return;
+
+            const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row =>
+                row.cells.length > colIndex && row.cells.length > 1
+            );
+            const uniqueValues = [...new Set(rows.map(row =>
+                (row.cells[colIndex].textContent || '').trim()
+            ))].sort((a, b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'}));
+
+            activeColumnFilter = { tableId, colIndex, button, uniqueValues };
+            if (!columnFilterSelections[tableId]) columnFilterSelections[tableId] = {};
+            if (!columnFilterSelections[tableId][colIndex]) {
+                columnFilterSelections[tableId][colIndex] = new Set(uniqueValues);
+            } else {
+                const existing = columnFilterSelections[tableId][colIndex];
+                const wasApplied = !!existing.__userApplied;
+                if (!wasApplied) {
+                    uniqueValues.forEach(v => existing.add(v));
+                }
+            }
+
+            document.getElementById('columnFilterTitle').textContent =
+                `Filter: ${table.querySelectorAll('thead tr:first-child th')[colIndex]?.textContent.trim() || 'Column'}`;
+            document.getElementById('columnFilterSearch').value = '';
+            renderColumnFilterOptions();
+
+            const rect = button.getBoundingClientRect();
+            menu.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 302)) + 'px';
+            const menuHeight = Math.min(420, window.innerHeight - 24);
+            menu.style.top = Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - menuHeight - 12)) + 'px';
+            menu.classList.remove('hidden');
+        }
+
+        // Sort the currently filtered table by the column whose filter menu is open.
+        function sortActiveColumn(direction) {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex } = activeColumnFilter;
+            const table = document.getElementById(tableId);
+            const tbody = table?.querySelector('tbody');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const av = (a.cells[colIndex]?.textContent || '').trim();
+                const bv = (b.cells[colIndex]?.textContent || '').trim();
+                const result = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+                return direction === 'desc' ? -result : result;
+            });
+            rows.forEach(row => tbody.appendChild(row));
+            reapplySavedDropdownFilters(tableId);
+            if (tableId === 'tableArchive') applyArchiveSearch();
+        }
+
+        function handleColumnFilterSearch() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').trim().toLocaleLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            // Each search is independent: replace this column's pending selection
+            // with every value matching the current query. No Clear All/manual tick.
+            if (search) {
+                selected.clear();
+                uniqueValues.filter(value => String(value).toLocaleLowerCase().includes(search))
+                    .forEach(value => selected.add(value));
+                selected.__searchNarrowed = true;
+            } else {
+                selected.__searchNarrowed = false;
+                // Clearing the text restores all choices unless this filter was
+                // already applied; in that case preserve the applied selection.
+                if (!selected.__userApplied) uniqueValues.forEach(value => selected.add(value));
+            }
+            renderColumnFilterOptions();
+        }
+
+        function renderColumnFilterOptions() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').trim().toLocaleLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            const holder = document.getElementById('columnFilterOptions');
+            holder.innerHTML = '';
+            const matches = uniqueValues.filter(v => String(v).toLocaleLowerCase().includes(search));
+            if (!matches.length) {
+                holder.textContent = 'No matching values found';
+                holder.className = 'space-y-1 text-sm text-slate-500';
+                return;
+            }
+            holder.className = 'space-y-1 text-sm';
+            matches.slice(0, 500).forEach(value => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 p-1 rounded hover:bg-slate-50';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selected.has(value);
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) selected.add(value);
+                    else selected.delete(value);
+                });
+                const text = document.createElement('span');
+                text.textContent = value || '(blank)';
+                text.className = 'break-all';
+                label.append(checkbox, text);
+                holder.appendChild(label);
+            });
+        }
+
+        function selectAllColumnFilterOptions(select) {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const search = (document.getElementById('columnFilterSearch').value || '').toLowerCase();
+            const selected = columnFilterSelections[tableId][colIndex];
+            uniqueValues.filter(v => v.toLowerCase().includes(search)).forEach(v => {
+                if (select) selected.add(v);
+                else selected.delete(v);
+            });
+            renderColumnFilterOptions();
+        }
+
+        function applyColumnFilterSelection() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            const selected = columnFilterSelections[tableId][colIndex];
+            selected.__userApplied = true;
+            saveColumnFilters();
+            reapplySavedDropdownFilters(tableId);
+            if (tableId === 'tableArchive') applyArchiveSearch();
+            activeColumnFilter.button.classList.toggle('text-blue-700', selected.size !== uniqueValues.length);
+            activeColumnFilter.button.classList.toggle('border-blue-500', selected.size !== uniqueValues.length);
+            closeColumnFilter();
+        }
+
+        function clearColumnFilterSelection() {
+            if (!activeColumnFilter) return;
+            const { tableId, colIndex, uniqueValues } = activeColumnFilter;
+            columnFilterSelections[tableId][colIndex] = new Set(uniqueValues);
+            columnFilterSelections[tableId][colIndex].__userApplied = false;
+            saveColumnFilters();
+            reapplySavedDropdownFilters(tableId);
+            if (tableId === 'tableArchive') applyArchiveSearch();
+            closeColumnFilter();
+        }
+
+        function closeColumnFilter() {
+            document.getElementById('columnFilterMenu')?.classList.add('hidden');
+            activeColumnFilter = null;
+        }
+
+        document.addEventListener('click', event => {
+            const menu = document.getElementById('columnFilterMenu');
+            if (menu && !menu.classList.contains('hidden') &&
+                !menu.contains(event.target) && !event.target.closest('button[onclick*="openColumnFilter"]')) {
+                closeColumnFilter();
+            }
+        });
+
+        // Live Column Filtering Engine
+        function applyTableFilter(tableId, colIndex, query) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            const filterText = String(query || '').toLowerCase();
+
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const cells = row.getElementsByTagName('td');
+                if (cells.length > colIndex) {
+                    const cellText = cells[colIndex].textContent || cells[colIndex].innerText || "";
+                    row.style.display = cellText.toLowerCase().includes(filterText) ? "" : "none";
+                }
+            });
+        }
+
+        // Reapply current header filters after table rows are rebuilt.
+        function reapplyTableFilters(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            table.querySelectorAll('thead input[oninput]').forEach(input => {
+                const handler = input.getAttribute('oninput') || '';
+                const match = handler.match(/applyTableFilter\('([^']+)',\s*(\d+),\s*this\.value\)/);
+                if (match) applyTableFilter(match[1], Number(match[2]), input.value || '');
+            });
+        }
+
+        // Helper: Refresh Stats and Badges Across Screen
+        function updateStatsAndBadges() {
+            const total = inventoryData.length;
+            const verified = inventoryData.filter(i => i.physicalQty !== null && i.physicalQty !== undefined && i.physicalQty !== "").length;
+            const pending = total - verified;
+
+            const diffCount = inventoryData.filter(i => i.physicalQty !== null && (i.physicalQty - i.systemQty !== 0)).length;
+
+            document.getElementById('statTotalLoaded').innerText = total;
+            document.getElementById('statVerifiedCount').innerText = verified;
+            document.getElementById('statPendingCount').innerText = pending;
+
+            document.getElementById('pendingBadge').innerText = pending;
+            document.getElementById('diffBadge').innerText = diffCount;
+        }
+
+        // Render All Views Sync
+        function renderAllViews() {
+            updateStatsAndBadges();
+            renderPvCountTable();
+            renderDifferenceTable();
+        }
+
+        // Local Storage Persistence
+        function saveStateToLocalStorage() {
+            localStorage.setItem('inventory_app_data', JSON.stringify(inventoryData));
+            localStorage.setItem('inventory_app_metadata', JSON.stringify(metadata));
+        }
+
+        function loadStateFromLocalStorage() {
+            const savedData = localStorage.getItem('inventory_app_data');
+            const savedMeta = localStorage.getItem('inventory_app_metadata');
+
+            if (savedData) inventoryData = JSON.parse(savedData);
+            if (savedMeta) {
+                metadata = JSON.parse(savedMeta);
+                document.getElementById('inputCompany').value = metadata.company || '';
+                document.getElementById('inputPlant').value = metadata.plant || '';
+                document.getElementById('inputProject').value = metadata.project || '';
+                saveMetadata();
+            }
+        }
+
+        // Confirm Clear All System Data
+        function confirmClearAllData() {
+            if (confirm("Are you sure you want to clear all loaded inventory items and audit counts? This action cannot be undone.")) {
+                inventoryData = [];
+                localStorage.removeItem('inventory_app_data');
+                renderAllViews();
+                showToast("All inventory data wiped clean.", "info");
+            }
+        }
+
+        // Toast Notification System
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.innerText = msg;
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 text-base';
+            } else if (type === 'error') {
+                toastIcon.className = 'fa-solid fa-circle-xmark text-rose-400 text-base';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-info text-blue-400 text-base';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Export Functionality: Excel
+        function exportToExcel(viewType) {
+            let dataToExport = [];
+            let fileName = "Inventory_Report.xlsx";
+
+            if (viewType === 'pvCount') {
+                fileName = "Pending_PV_Count.xlsx";
+                dataToExport = inventoryData.filter(i => i.physicalQty === null).map(i => ({
+                    "Item Code": i.code,
+                    "Item Description": i.name,
+                    "System Qty": i.systemQty,
+                    "Unit": i.unit,
+                    "Remarks": i.remarks
+                }));
+            } else if (viewType === 'difference') {
+                fileName = "Inventory_Difference_Report.xlsx";
+                dataToExport = inventoryData.filter(i => i.physicalQty !== null && (i.physicalQty - i.systemQty !== 0)).map(i => ({
+                    "Item Code": i.code,
+                    "Item Description": i.name,
+                    "System Qty": i.systemQty,
+                    "Physical Qty": i.physicalQty,
+                    "Difference": i.physicalQty - i.systemQty,
+                    "Unit": i.unit,
+                    "Remarks": i.remarks
+                }));
+            } else if (viewType === 'archive') {
+                const date = document.getElementById('archiveDateSelect').value;
+                fileName = `Audit_Archive_${date}.xlsx`;
+                dataToExport = inventoryData.filter(i => i.physicalQty !== null && i.date === date).map(i => ({
+                    "Item Code": i.code,
+                    "Item Description": i.name,
+                    "System Qty": i.systemQty,
+                    "Physical Qty": i.physicalQty,
+                    "Difference": i.physicalQty - i.systemQty,
+                    "Unit": i.unit,
+                    "Verification Date": i.date,
+                    "Remarks": i.remarks
+                }));
+            } else {
+                fileName = "Perpetual_Count.xlsx";
+                dataToExport = inventoryData.slice(0, 50).map(i => ({
+                    "Item Code": i.code,
+                    "Item Description": i.name,
+                    "System Qty": i.systemQty,
+                    "Physical Qty": i.physicalQty !== null ? i.physicalQty : "",
+                    "Unit": i.unit,
+                    "Remarks": i.remarks
+                }));
+            }
+
+            if (dataToExport.length === 0) {
+                showToast("No data available to export!", "error");
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Report");
+            XLSX.writeFile(wb, fileName);
+            showToast("Excel downloaded successfully!");
+        }
+
+        // Export Functionality: PDF using jsPDF AutoTable
+        function exportToPDF(viewType) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFontSize(14);
+            doc.text(metadata.company || "INVENTORY AUDIT REPORT", 14, 15);
+            doc.setFontSize(9);
+            doc.text(`Plant Code: ${metadata.plant || 'N/A'} | Project: ${metadata.project || 'N/A'} | Date: ${new Date().toLocaleDateString()}`, 14, 22);
+
+            let tableId = "tablePvCount";
+            let title = "Pending Physical Verification List";
+
+            if (viewType === 'difference') {
+                tableId = "tableDifference";
+                title = "Inventory Difference & Variance Report";
+            } else if (viewType === 'perpetual') {
+                tableId = "tablePerpetual";
+                title = "Perpetual Inventory Verification";
+            } else if (viewType === 'archive') {
+                tableId = "tableArchive";
+                title = "Audit Archive Report";
+            }
+
+            doc.text(title, 14, 30);
+
+            doc.autoTable({
+                html: '#' + tableId,
+                startY: 35,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [30, 41, 59] },
+                filter: (cell, data) => {
+                    // Ignore inputs from table export
+                    return true;
+                }
+            });
+
+            doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
+            showToast("PDF exported successfully!");
+        }
+    </script>
+</body>
+</html>
