@@ -9,6 +9,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase Authentication (compat SDK for this standalone HTML app) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <!-- SheetJS CDN (XLSX) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- jsPDF & AutoTable CDN -->
@@ -92,6 +95,26 @@
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Firebase login gate: existing inventory interface below is preserved -->
+    <div id="firebaseLoginGate" style="position:fixed;inset:0;z-index:99999;background:#0f172a;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div style="width:100%;max-width:420px;background:white;border-radius:18px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.35);">
+        <div style="text-align:center;margin-bottom:22px"><div style="font-size:34px">📦</div><h2 style="font-size:25px;font-weight:800;color:#0f172a;margin:8px 0">StockAudit Pro</h2><p style="color:#64748b;font-size:14px">Sign in to continue</p></div>
+        <form id="firebaseLoginForm" style="display:flex;flex-direction:column;gap:12px">
+          <label for="firebaseEmail" style="font-size:13px;font-weight:700;color:#334155">Email address</label>
+          <input id="firebaseEmail" type="email" autocomplete="username" required placeholder="Enter your registered email" style="padding:12px;border:1px solid #cbd5e1;border-radius:9px;width:100%;box-sizing:border-box;color:#0f172a">
+          <label for="firebasePassword" style="font-size:13px;font-weight:700;color:#334155">Password</label>
+          <input id="firebasePassword" type="password" autocomplete="current-password" required placeholder="Enter password" style="padding:12px;border:1px solid #cbd5e1;border-radius:9px;width:100%;box-sizing:border-box;color:#0f172a">
+          <button id="firebaseLoginButton" type="submit" style="padding:12px;background:#2563eb;color:white;border:0;border-radius:9px;font-weight:700;margin-top:5px;cursor:pointer">Sign in</button>
+          <button id="firebaseResetButton" type="button" style="padding:8px;background:transparent;color:#2563eb;border:0;font-weight:600;cursor:pointer">Forgot password?</button>
+          <p id="firebaseLoginMessage" role="status" style="font-size:13px;color:#b91c1c;min-height:18px;margin:0"></p>
+        </form>
+      </div>
+    </div>
+    <div id="firebaseUserBar" class="no-print" style="display:none;position:fixed;z-index:9998;right:10px;top:10px;background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:7px 10px;box-shadow:0 4px 14px #0002;font-size:12px;align-items:center;gap:8px;max-width:calc(100vw - 20px)">
+      <span id="firebaseUserLabel" style="color:#334155;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button id="firebaseLogoutButton" type="button" style="background:#dc2626;color:#fff;border:0;border-radius:6px;padding:6px 9px;font-weight:700;cursor:pointer">Log out</button>
+    </div>
 
     <!-- Print Header (Visible only when printing) -->
     <div class="print-only p-4 border-b border-slate-300 mb-4">
@@ -532,6 +555,80 @@
     </div>
 
     <script>
+        // Firebase Authentication configuration for StockAudit Pro
+        const stockAuditFirebaseConfig = {
+          apiKey: "AIzaSyDEF8VWUbg_8Rj7QR2RcrQGQDGqTC0ODxzU",
+          authDomain: "stockaudit-pro-7677e.firebaseapp.com",
+          projectId: "stockaudit-pro-7677e",
+          storageBucket: "stockaudit-pro-7677e.firebasestorage.app",
+          messagingSenderId: "629314131631",
+          appId: "1:629314131631:web:9ed0b7d10c349a2b0c665a",
+          measurementId: "G-JWZQR34RS6"
+        };
+        const STOCKAUDIT_MASTER_UID = "8NEStfygyaTFhyPQ1oYWAMdotvx2";
+        let stockAuditAuth = null;
+        try {
+          if (!firebase.apps.length) firebase.initializeApp(stockAuditFirebaseConfig);
+          stockAuditAuth = firebase.auth();
+        } catch (e) {
+          console.error('Firebase initialization error:', e);
+          const msg = document.getElementById('firebaseLoginMessage');
+          if (msg) msg.textContent = 'Firebase could not start. Check internet connection and Firebase configuration.';
+        }
+        const loginGateEl = document.getElementById('firebaseLoginGate');
+        const userBarEl = document.getElementById('firebaseUserBar');
+        const loginMessageEl = document.getElementById('firebaseLoginMessage');
+        const loginButtonEl = document.getElementById('firebaseLoginButton');
+        if (stockAuditAuth) {
+          stockAuditAuth.onAuthStateChanged(user => {
+            loginGateEl.style.display = user ? 'none' : 'flex';
+            userBarEl.style.display = user ? 'flex' : 'none';
+            if (user) {
+              const roleLabel = user.uid === STOCKAUDIT_MASTER_UID ? 'Master Owner' : 'Signed in';
+              document.getElementById('firebaseUserLabel').textContent = `${roleLabel} • ${user.email || user.uid}`;
+            }
+          });
+        }
+        document.getElementById('firebaseLoginForm').addEventListener('submit', async e => {
+          e.preventDefault();
+          if (!stockAuditAuth) { loginMessageEl.textContent = 'Firebase is not initialized. Refresh and try again.'; return; }
+          loginMessageEl.style.color = '#b91c1c';
+          loginMessageEl.textContent = '';
+          loginButtonEl.disabled = true;
+          loginButtonEl.textContent = 'Signing in…';
+          try {
+            const email = document.getElementById('firebaseEmail').value.trim();
+            const password = document.getElementById('firebasePassword').value;
+            await stockAuditAuth.signInWithEmailAndPassword(email, password);
+          } catch (err) {
+            const messages = {
+              'auth/invalid-credential': 'Email or password is incorrect.',
+              'auth/user-not-found': 'No account found for this email.',
+              'auth/wrong-password': 'Password is incorrect.',
+              'auth/too-many-requests': 'Too many attempts. Wait a while and try again.',
+              'auth/network-request-failed': 'Network error. Check your internet connection.'
+            };
+            loginMessageEl.textContent = messages[err.code] || (err.message || 'Sign-in failed. Please try again.');
+          } finally {
+            loginButtonEl.disabled = false;
+            loginButtonEl.textContent = 'Sign in';
+          }
+        });
+        document.getElementById('firebaseResetButton').addEventListener('click', async () => {
+          const email = document.getElementById('firebaseEmail').value.trim();
+          if (!email) { loginMessageEl.textContent = 'Enter your email address first.'; return; }
+          try {
+            await stockAuditAuth.sendPasswordResetEmail(email);
+            loginMessageEl.style.color = '#047857';
+            loginMessageEl.textContent = 'Password reset email sent. Check your inbox.';
+          } catch (err) {
+            loginMessageEl.style.color = '#b91c1c';
+            loginMessageEl.textContent = err.message || 'Could not send reset email.';
+          }
+        });
+        document.getElementById('firebaseLogoutButton').addEventListener('click', async () => {
+          if (stockAuditAuth) await stockAuditAuth.signOut();
+        });
         // Global Application State stored in LocalStorage
         let inventoryData = [];
         let metadata = {
