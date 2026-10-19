@@ -1254,26 +1254,29 @@
                 table.dataset.photoColumnAdded = '1';
             }
             const cell = document.createElement('td');
-            cell.className = 'p-2 align-top';
-            cell.style.minWidth = '118px';
-            // Display-photo tile: show the saved image directly in the table, never open it in a new tab/modal.
-            const displayTile = document.createElement('div');
-            displayTile.style.cssText = 'width:92px;min-height:76px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;margin:0 0 6px;padding:3px;box-sizing:border-box';
-            if (item.imageUrl) {
-                const preview = document.createElement('img');
-                preview.src = item.imageThumb || item.imageUrl; preview.alt = 'Display photo';
-                preview.loading = 'lazy'; preview.draggable = false;
-                preview.style.cssText = 'display:block;width:84px;height:54px;object-fit:contain;border-radius:5px;pointer-events:none';
-                preview.title = 'Display photo';
-                displayTile.appendChild(preview);
-                const cap = document.createElement('span'); cap.textContent = 'Display photo';
-                cap.style.cssText = 'font-size:9px;color:#475569;line-height:13px'; displayTile.appendChild(cap);
-            } else {
-                const ph = document.createElement('span'); ph.textContent = 'No photo';
-                ph.style.cssText = 'font-size:11px;color:#64748b;padding:12px 2px'; displayTile.appendChild(ph);
-            }
-            // Intentionally no click handler on the image/tile, so it remains an inline display option.
-            cell.appendChild(displayTile);
+            cell.className = 'p-1 align-top';
+            cell.style.cssText = 'width:96px;min-width:96px;max-width:96px;box-sizing:border-box';
+            // Keep photos hidden in the table; show them only after tapping the Display photo button.
+            const displayBtn = document.createElement('button');
+            displayBtn.type = 'button';
+            displayBtn.textContent = item.imageUrl ? 'Display photo' : 'No photo';
+            displayBtn.className = 'rounded-md border border-slate-300 bg-slate-50 px-2 py-2 text-[11px] font-semibold text-slate-700';
+            displayBtn.style.cssText = 'display:block;width:88px;white-space:normal;line-height:1.2;margin:0 0 5px';
+            displayBtn.disabled = !item.imageUrl;
+            displayBtn.addEventListener('click', e => {
+                e.preventDefault(); e.stopPropagation();
+                if (!item.imageUrl) return;
+                let modal = document.getElementById('stockAuditPhotoViewModal');
+                if (!modal) {
+                    modal = document.createElement('div'); modal.id = 'stockAuditPhotoViewModal';
+                    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+                    modal.innerHTML = '<div style="position:relative;background:white;border-radius:12px;padding:12px;max-width:92vw;max-height:90vh;box-sizing:border-box"><button type="button" aria-label="Close photo" style="position:absolute;right:6px;top:4px;border:0;border-radius:8px;background:#e2e8f0;padding:5px 10px;font-size:20px;z-index:1">×</button><img alt="Material photo" style="display:block;max-width:86vw;max-height:78vh;object-fit:contain;margin-top:24px"></div>';
+                    modal.addEventListener('click', ev => { if (ev.target === modal || ev.target.tagName === 'BUTTON') modal.remove(); });
+                    document.body.appendChild(modal);
+                }
+                const modalImg = modal.querySelector('img'); modalImg.src = item.imageUrl; modalImg.alt = (item.name || item.code || 'Material') + ' photo';
+            });
+            cell.appendChild(displayBtn);
             const upload = document.createElement('input');
             upload.type = 'file'; upload.accept = 'image/*'; upload.setAttribute('capture','environment');
             upload.style.display = 'none';
@@ -1291,8 +1294,8 @@
             cell.appendChild(upload);
             const smallBtn = (label, icon, handler) => {
                 const b = document.createElement('button'); b.type = 'button';
-                b.className = 'inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100';
-                b.style.margin = '2px 2px 2px 0'; b.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + label;
+                b.className = 'inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-1 text-[10px] font-semibold text-blue-700 hover:bg-blue-100';
+                b.style.cssText = 'display:flex;max-width:88px;white-space:normal;justify-content:center;margin:3px 0;padding:5px 4px;box-sizing:border-box'; b.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + label;
                 b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); handler(); }); cell.appendChild(b); return b;
             };
             smallBtn(item.imageUrl ? 'Change' : 'Add photo', 'fa-camera', () => upload.click());
