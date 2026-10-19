@@ -164,6 +164,64 @@
 .mp-result button{margin:8px;padding:8px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}
 @media(min-width:640px){.mp-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.mp-result img{height:180px}}
 </style>
+  <style id="stockaudit-pro-design-refresh">
+/* Visual-only design refresh inspired by the approved StockAudit Pro storyboard.
+   No HTML controls, IDs, handlers, data logic, or integrations are removed. */
+:root{--sap-navy:#082f59;--sap-blue:#075ac8;--sap-blue2:#eaf3ff;--sap-border:#d8e2ef;--sap-text:#172b45;--sap-muted:#64748b;--sap-bg:#f1f5fb;--sap-card-shadow:0 8px 24px rgba(15,44,80,.07)}
+html,body{background:var(--sap-bg)!important;color:var(--sap-text)}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important}
+header.bg-slate-900{background:linear-gradient(110deg,#062b52,#0b477e)!important;box-shadow:0 6px 22px rgba(5,32,63,.18)!important;border-bottom:1px solid #204f7b}
+header .bg-blue-600{background:#1265d8!important;border-radius:12px!important}
+header h1{letter-spacing:-.025em}
+header .text-slate-400{color:#c4d7eb!important}
+#openNavDrawer{background:#143e67!important;border-color:#42617e!important;border-radius:12px!important}
+#navDrawer{background:linear-gradient(180deg,#082f59,#061d38)!important}
+#navDrawer .tab-btn{border:1px solid transparent!important}
+#navDrawer .tab-btn.bg-blue-600{background:#176bd7!important;box-shadow:0 5px 14px #001c3d55}
+#navDrawer .tab-btn:not(.bg-blue-600){color:#d7e7f7!important}
+#navDrawer .tab-btn:not(.bg-blue-600):hover{background:#153f68!important}
+main.max-w-7xl{padding-top:24px!important;padding-bottom:32px!important}
+.tab-content>div.bg-white,.tab-content>div.rounded-xl,.tab-content>div[id],#archiveTab .bg-white,#differenceTab .bg-white,#pvCountTab .bg-white,#uploadTab .bg-white{border-color:var(--sap-border)!important;border-radius:17px!important;box-shadow:var(--sap-card-shadow)!important}
+.tab-content h2{color:#173453!important;letter-spacing:-.018em}
+.tab-content h2 i{filter:saturate(1.08)}
+label{color:#52667e}
+input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea{border-color:#d2deeb!important;border-radius:9px!important;background-color:#fff}
+input:focus,select:focus,textarea:focus{border-color:#6aa5f4!important;box-shadow:0 0 0 3px rgba(37,99,235,.13)!important}
+button{border-radius:9px}
+button.bg-blue-600,.tab-btn.bg-blue-600{background:#075ac8!important}
+button.bg-blue-600:hover{background:#064ca8!important}
+button.bg-emerald-600{background:#059669!important}
+button.bg-rose-600,button.bg-red-600{background:#e11d48!important}
+button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
+.tab-content table{border-collapse:separate!important;border-spacing:0!important;background:#fff;border:1px solid #dce5ef;border-radius:12px;overflow:hidden}
+.tab-content thead th,.sticky-thead th{background:#edf4fc!important;color:#183b60!important;font-weight:750!important;border-bottom:1px solid #d6e2ef!important}
+.tab-content tbody td{border-color:#e6edf5!important;color:#293e56}
+.tab-content tbody tr:nth-child(even){background:#f9fbfe}
+.tab-content tbody tr:hover{background:#eef6ff!important}
+.tab-content .text-xs{line-height:1.45}
+#firebaseLoginGate{background:radial-gradient(circle at 18% 18%,#1e5e99 0,#0b3968 35%,#061b34 100%)!important;padding:18px!important}
+#firebaseLoginGate>div{max-width:430px!important;border:1px solid #d9e7f5!important;border-radius:22px!important;padding:28px!important;box-shadow:0 24px 80px rgba(0,0,0,.3)!important}
+#firebaseLoginGate h2{color:#0b3159!important;letter-spacing:-.03em}
+#firebaseLoginGate input{min-height:43px}
+#firebaseLoginGate button{min-height:42px}
+#firebaseLoginGate #showEmailLogin,#firebaseLoginGate #showPhoneLogin{border-radius:10px!important}
+#materialPhotoModal{backdrop-filter:blur(4px)}
+#materialPhotoDialog{border:1px solid #d8e4f1!important;border-radius:18px!important}
+/* Keep the photo action compact; the image itself remains hidden until Display photo is tapped. */
+#pvCountTab td:last-child button,#perpetualTab td:last-child button{max-width:100%;white-space:normal;line-height:1.25}
+@media(max-width:640px){
+ main.max-w-7xl{padding:14px 10px 24px!important}
+ .tab-content>div.bg-white,.tab-content>div.rounded-xl,.tab-content>div[id]{padding:14px!important;border-radius:14px!important}
+ .tab-content h2{font-size:1rem!important;line-height:1.35!important}
+ header .h-16{min-height:64px;height:auto!important;padding-top:8px;padding-bottom:8px;gap:8px}
+ header h1{font-size:1rem!important}
+ header p{font-size:10px!important}
+ .tab-content table{font-size:11px}
+ .tab-content th,.tab-content td{padding:7px 6px!important}
+ #materialPhotoDialog{max-height:90dvh!important}
+}
+@media print{html,body{background:#fff!important}header{background:#fff!important;color:#000!important} .tab-content>div{box-shadow:none!important}}
+</style>
  </head>
  <body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
   <!-- Firebase login gate: existing inventory interface below is preserved -->
