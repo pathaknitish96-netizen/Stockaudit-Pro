@@ -1119,6 +1119,32 @@
             reader.readAsArrayBuffer(file);
         }
 
+        // Free material reference lookup: opens Google Images using the material code and description.
+        // This does not download or save images automatically; it is the no-API starter workflow.
+        function searchMaterialImage(code, name) {
+            const query = [name, code, 'industrial material product'].filter(Boolean).join(' ').trim();
+            const url = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(query);
+            const opened = window.open(url, '_blank', 'noopener,noreferrer');
+            if (!opened) showToast('Pop-up blocked. Allow pop-ups or use the Google Images link again.', 'error');
+        }
+
+        function addMaterialImageButton(row, item) {
+            const cell = row && row.cells ? row.cells[2] : null;
+            if (!cell) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'mt-1 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100';
+            button.innerHTML = '<i class="fa-brands fa-google"></i> Find material photo';
+            button.title = 'Search Google Images for this material';
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                searchMaterialImage(item.code, item.name);
+            });
+            cell.appendChild(document.createElement('br'));
+            cell.appendChild(button);
+        }
+
         // Main Physical Quantity Update Engine
         function updatePhysicalQty(id, value, remarks = null, sourceInput = null) {
             if (!stockAuditCurrentPermissions.edit) { showToast('You do not have permission to edit counts.','error'); return; }
@@ -1211,6 +1237,7 @@
                         <span class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full">PENDING</span>
                     </td>
                 `;
+                addMaterialImageButton(tr, item);
                 tbody.appendChild(tr);
             });
                     reapplySavedDropdownFilters('tablePvCount');
@@ -1264,6 +1291,7 @@
                     </td>
                     <td class="p-3 text-center">${badge}</td>
                 `;
+                addMaterialImageButton(tr, item);
                 tbody.appendChild(tr);
             });
         }
@@ -1312,6 +1340,7 @@
                     </td>
                     <td class="p-3 text-center">${statusBadge}</td>
                 `;
+                addMaterialImageButton(tr, item);
                 tbody.appendChild(tr);
             });
         }
@@ -1357,6 +1386,7 @@
                                onchange="updateRemarks(${item.id}, this.value)">
                     </td>
                 `;
+                addMaterialImageButton(tr, item);
                 tbody.appendChild(tr);
             });
             if (typeof applyArchiveSearch === 'function') applyArchiveSearch();
