@@ -93,23 +93,51 @@
         }
         #columnFilterMenuActions { flex: 0 0 auto; background: white; }
     
-/* StockAudit Pro — Smooth Professional Motion Layer (visual-only) */
-:root { --sap-motion: 240ms; --sap-ease: cubic-bezier(.22,.61,.36,1); }
+/* StockAudit Pro Smooth Professional animations */
+:root { --motion-ease: cubic-bezier(.2,.7,.2,1); --motion-fast: 180ms; --motion-medium: 320ms; }
 @media (prefers-reduced-motion: no-preference) {
-  .tab-content:not(.hidden) { animation: sapPageIn 320ms var(--sap-ease) both; }
-  .sap-motion-card { animation: sapCardIn 420ms var(--sap-ease) both; animation-delay: var(--sap-delay, 0ms); }
-  button, .tab-btn, a, select, input[type="file"] + label { transition: transform 180ms var(--sap-ease), box-shadow 180ms var(--sap-ease), background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
-  button:active, .tab-btn:active { transform: scale(.98); }
-  input:not([type="checkbox"]):not([type="radio"]), select, textarea { transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
-  input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(59,130,246,.14); }
-  tbody tr { transition: background-color 150ms ease, box-shadow 150ms ease; }
-  tbody tr:hover { box-shadow: inset 3px 0 0 rgba(59,130,246,.45); }
-  .sap-anim-in { animation: sapElementIn 280ms var(--sap-ease) both; }
+  html { scroll-behavior: smooth; }
+  .tab-content:not(.hidden) { animation: sap-section-enter 360ms var(--motion-ease) both; }
+  .tab-content:not(.hidden) > .bg-white,
+  .tab-content:not(.hidden) > .bg-slate-50,
+  .tab-content:not(.hidden) > div.rounded-xl,
+  .tab-content:not(.hidden) > div[id] { animation: sap-card-enter 420ms var(--motion-ease) both; }
+  .tab-content:not(.hidden) > :nth-child(2) { animation-delay: 45ms; }
+  .tab-content:not(.hidden) > :nth-child(3) { animation-delay: 90ms; }
+  .tab-content:not(.hidden) > :nth-child(4) { animation-delay: 135ms; }
+  .tab-content:not(.hidden) > :nth-child(5) { animation-delay: 180ms; }
+  .tab-btn, button, a, select, input, textarea, .cursor-pointer { transition: transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease; }
+  button:active, .tab-btn:active { transform: scale(.975); }
+  button:hover:not(:disabled) { filter: brightness(1.025); }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,.17); }
+  tbody tr { animation: sap-row-enter 240ms var(--motion-ease) both; transition: background-color 150ms ease; }
+  tbody tr:hover { background-color: rgba(219,234,254,.42); }
+  .column-filter-menu { animation: sap-pop-enter 180ms var(--motion-ease) both; transform-origin: top right; }
+  #toast:not(.translate-y-20) { animation: sap-toast-enter 220ms var(--motion-ease) both; }
+  .sap-field-focus { animation: sap-focus-pulse 260ms var(--motion-ease); }
 }
-@keyframes sapPageIn { from { opacity: .55; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes sapCardIn { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes sapElementIn { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sap-section-enter { from { opacity: .45; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sap-card-enter { from { opacity: 0; transform: translateY(12px) scale(.992); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sap-row-enter { from { opacity: .35; } to { opacity: 1; } }
+@keyframes sap-pop-enter { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sap-toast-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sap-focus-pulse { from { box-shadow: 0 0 0 0 rgba(59,130,246,0); } to { box-shadow: 0 0 0 3px rgba(59,130,246,.17); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
+
+/* Side-opening navigation drawer */
+#navDrawerOverlay { position:fixed; inset:0; z-index:10000; background:rgba(15,23,42,.48); opacity:0; visibility:hidden; transition:opacity 260ms ease, visibility 260ms ease; }
+#navDrawerOverlay.is-open { opacity:1; visibility:visible; }
+#navDrawer { position:fixed; z-index:10001; top:0; left:0; bottom:0; width:min(320px,86vw); padding:18px 14px 24px; background:#0f172a; box-shadow:16px 0 40px rgba(15,23,42,.28); transform:translateX(-105%); transition:transform 320ms cubic-bezier(.2,.7,.2,1); overflow-y:auto; }
+#navDrawer.is-open { transform:translateX(0); }
+#navDrawer .drawer-heading { display:flex; align-items:center; justify-content:space-between; padding:6px 8px 18px; margin-bottom:12px; border-bottom:1px solid #334155; color:white; }
+#navDrawer #navigationTabs { display:flex; flex-direction:column; gap:7px; overflow:visible; padding:0; }
+#navDrawer .tab-btn { width:100%; text-align:left; justify-content:flex-start; min-height:46px; padding:12px 14px; border-radius:10px; }
+#navDrawer .tab-btn:not(.bg-blue-600) { background:transparent; }
+#navDrawer .tab-btn:not(.bg-blue-600):hover { background:#1e293b; }
+#openNavDrawer { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border:1px solid #475569; border-radius:10px; background:#1e293b; color:white; margin-right:12px; }
+#openNavDrawer:hover { background:#334155; }
+@media print { #navDrawer, #navDrawerOverlay, #openNavDrawer { display:none !important; } }
 
 </style>
  </head>
@@ -161,6 +189,7 @@
    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between h-16">
      <div class="flex items-center space-x-3">
+      <button id="openNavDrawer" type="button" onclick="openStockAuditDrawer()" aria-label="Open side menu" aria-controls="navDrawer" aria-expanded="false"><i class="fa-solid fa-bars text-lg"></i></button>
       <div class="bg-blue-600 p-2 rounded-lg text-white">
        <i class="fa-solid fa-boxes-stacked text-xl"></i>
       </div>
@@ -185,19 +214,28 @@
      </div>
     </div>
    </div>
-   <!-- Navigation Tabs -->
-   <div class="bg-slate-800 border-t border-slate-700">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-     <nav class="flex space-x-1 sm:space-x-4 overflow-x-auto py-2" id="navigationTabs">
-      <button onclick="switchTab('uploadTab')" id="btn-uploadTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 flex items-center space-x-2 bg-blue-600 text-white"><i class="fa-solid fa-cloud-arrow-up"></i> <span>PV Upload &amp; Settings</span></button>
-      <button onclick="switchTab('pvCountTab')" id="btn-pvCountTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-list-check"></i> <span>PV Count (Pending)</span> <span id="pendingBadge" class="ml-1 px-2 py-0.5 text-xs bg-amber-500 text-slate-950 font-bold rounded-full">0</span></button>
-      <button onclick="switchTab('differenceTab')" id="btn-differenceTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-triangle-exclamation"></i> <span>Difference List</span> <span id="diffBadge" class="ml-1 px-2 py-0.5 text-xs bg-rose-500 text-white font-bold rounded-full">0</span></button>
-      <button onclick="switchTab('perpetualTab')" id="btn-perpetualTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-layer-group"></i> <span>Perpetual Counting</span></button>
-      <button onclick="switchTab('archiveTab')" id="btn-archiveTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-box-archive"></i> <span>Date Archive</span></button>
-      <button onclick="switchTab('usersTab')" id="btn-usersTab" class="tab-btn hidden px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-users-gear"></i><span>User Management</span></button>
-     </nav>
+   <!-- Side-opening Navigation Drawer -->
+   <div id="navDrawerOverlay" onclick="closeStockAuditDrawer()" aria-hidden="true"></div>
+   <aside id="navDrawer" aria-label="Main navigation" aria-hidden="true">
+    <div class="drawer-heading">
+     <div class="flex items-center gap-3">
+      <span class="bg-blue-600 p-2 rounded-lg"><i class="fa-solid fa-boxes-stacked"></i></span>
+      <div>
+       <div class="font-bold">StockAudit Pro</div>
+       <div class="text-xs text-slate-400">Navigation Menu</div>
+      </div>
+     </div>
+     <button type="button" onclick="closeStockAuditDrawer()" aria-label="Close side menu" class="text-slate-300 hover:text-white p-2 rounded-lg"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
-   </div>
+    <nav class="flex flex-col gap-2" id="navigationTabs">
+     <button onclick="switchTab('uploadTab')" id="btn-uploadTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 flex items-center space-x-2 bg-blue-600 text-white"><i class="fa-solid fa-cloud-arrow-up"></i> <span>PV Upload &amp; Settings</span></button>
+     <button onclick="switchTab('pvCountTab')" id="btn-pvCountTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-list-check"></i> <span>PV Count (Pending)</span> <span id="pendingBadge" class="ml-1 px-2 py-0.5 text-xs bg-amber-500 text-slate-950 font-bold rounded-full">0</span></button>
+     <button onclick="switchTab('differenceTab')" id="btn-differenceTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-triangle-exclamation"></i> <span>Difference List</span> <span id="diffBadge" class="ml-1 px-2 py-0.5 text-xs bg-rose-500 text-white font-bold rounded-full">0</span></button>
+     <button onclick="switchTab('perpetualTab')" id="btn-perpetualTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-layer-group"></i> <span>Perpetual Counting</span></button>
+     <button onclick="switchTab('archiveTab')" id="btn-archiveTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-box-archive"></i> <span>Date Archive</span></button>
+     <button onclick="switchTab('usersTab')" id="btn-usersTab" class="tab-btn hidden px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-users-gear"></i><span>User Management</span></button>
+    </nav>
+   </aside>
   </header>
   <!-- App Main Container -->
   <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -865,8 +903,33 @@
             renderAllViews();
         };
 
+        // Side drawer controls (keeps the existing tab logic and permissions intact)
+        function openStockAuditDrawer() {
+            const drawer = document.getElementById('navDrawer');
+            const overlay = document.getElementById('navDrawerOverlay');
+            const trigger = document.getElementById('openNavDrawer');
+            if (!drawer || !overlay) return;
+            drawer.classList.add('is-open');
+            overlay.classList.add('is-open');
+            drawer.setAttribute('aria-hidden', 'false');
+            overlay.setAttribute('aria-hidden', 'false');
+            if (trigger) trigger.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeStockAuditDrawer() {
+            const drawer = document.getElementById('navDrawer');
+            const overlay = document.getElementById('navDrawerOverlay');
+            const trigger = document.getElementById('openNavDrawer');
+            if (drawer) { drawer.classList.remove('is-open'); drawer.setAttribute('aria-hidden', 'true'); }
+            if (overlay) { overlay.classList.remove('is-open'); overlay.setAttribute('aria-hidden', 'true'); }
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', function(event) { if (event.key === 'Escape') closeStockAuditDrawer(); });
+
         // Tab Switching Logic
         function switchTab(tabId) {
+            closeStockAuditDrawer();
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-blue-600', 'text-white');
@@ -1735,52 +1798,30 @@
         }
     </script>
   <script>
-/* Visual-only motion enhancements. Existing app handlers/data logic remain unchanged. */
-(function stockAuditSmoothMotion(){
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) return;
-  function animateVisible(container){
-    if (!container) return;
-    const cards = container.querySelectorAll(':scope > .bg-white, :scope > .bg-slate-50, :scope > .rounded-xl, :scope > div');
-    let i = 0;
-    cards.forEach(el => {
-      if (el.classList.contains('hidden') || el.closest('.hidden')) return;
-      el.classList.remove('sap-motion-card');
-      el.style.removeProperty('--sap-delay');
-      void el.offsetWidth;
-      el.classList.add('sap-motion-card');
-      el.style.setProperty('--sap-delay', Math.min(i * 45, 225) + 'ms');
-      i++;
+/* Replays entry motion when a section is opened; does not alter inventory/auth handlers. */
+(function(){
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  function replaySection(section){
+    if(!section || section.classList.contains('hidden')) return;
+    section.classList.remove('sap-replay');
+    void section.offsetWidth;
+    section.classList.add('sap-replay');
+    const cards = section.querySelectorAll(':scope > .bg-white, :scope > .bg-slate-50, :scope > div.rounded-xl');
+    cards.forEach((card,i)=>{
+      card.style.animation='none'; void card.offsetWidth; card.style.removeProperty('animation');
+      card.style.animationDelay=Math.min(i*55,220)+'ms';
     });
   }
-  document.addEventListener('DOMContentLoaded', function(){
-    document.querySelectorAll('.tab-content:not(.hidden)').forEach(animateVisible);
-    document.querySelectorAll('button, .tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        window.setTimeout(() => {
-          document.querySelectorAll('.tab-content:not(.hidden)').forEach(animateVisible);
-        }, 30);
-      }, {passive:true});
-    });
-    document.querySelectorAll('input, select, textarea').forEach(field => {
-      field.addEventListener('focus', () => field.classList.add('sap-anim-in'));
-      field.addEventListener('blur', () => field.classList.remove('sap-anim-in'));
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.tab-content:not(.hidden)').forEach(replaySection);
+    document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>setTimeout(()=>{
+      document.querySelectorAll('.tab-content:not(.hidden)').forEach(replaySection);
+    },20)));
+    document.querySelectorAll('input,select,textarea').forEach(el=>{
+      el.addEventListener('focus',()=>el.classList.add('sap-field-focus'));
+      el.addEventListener('blur',()=>el.classList.remove('sap-field-focus'));
     });
   });
-  // App's own window.onload may be assigned later; this observer also handles dynamically rendered tables/cards.
-  const observer = new MutationObserver(records => {
-    for (const record of records) {
-      if (record.type === 'childList' && record.addedNodes.length) {
-        record.addedNodes.forEach(node => {
-          if (node.nodeType !== 1) return;
-          if (node.matches && node.matches('tbody tr, .rounded-xl, .bg-white')) {
-            node.classList.add('sap-motion-card');
-          }
-        });
-      }
-    }
-  });
-  document.addEventListener('DOMContentLoaded', () => observer.observe(document.body, {childList:true, subtree:true}));
 })();
 </script>
  </body>
