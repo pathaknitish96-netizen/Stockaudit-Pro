@@ -1256,13 +1256,24 @@
             const cell = document.createElement('td');
             cell.className = 'p-2 align-top';
             cell.style.minWidth = '118px';
+            // Display-photo tile: show the saved image directly in the table, never open it in a new tab/modal.
+            const displayTile = document.createElement('div');
+            displayTile.style.cssText = 'width:92px;min-height:76px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;margin:0 0 6px;padding:3px;box-sizing:border-box';
             if (item.imageUrl) {
                 const preview = document.createElement('img');
-                preview.src = item.imageThumb || item.imageUrl; preview.alt = 'Saved material photo';
-                preview.loading = 'lazy'; preview.style.cssText = 'display:block;width:84px;height:58px;object-fit:cover;border-radius:7px;border:1px solid #cbd5e1;margin:0 0 5px';
-                preview.title = 'Saved material photo';
-                cell.appendChild(preview);
+                preview.src = item.imageThumb || item.imageUrl; preview.alt = 'Display photo';
+                preview.loading = 'lazy'; preview.draggable = false;
+                preview.style.cssText = 'display:block;width:84px;height:54px;object-fit:contain;border-radius:5px;pointer-events:none';
+                preview.title = 'Display photo';
+                displayTile.appendChild(preview);
+                const cap = document.createElement('span'); cap.textContent = 'Display photo';
+                cap.style.cssText = 'font-size:9px;color:#475569;line-height:13px'; displayTile.appendChild(cap);
+            } else {
+                const ph = document.createElement('span'); ph.textContent = 'No photo';
+                ph.style.cssText = 'font-size:11px;color:#64748b;padding:12px 2px'; displayTile.appendChild(ph);
             }
+            // Intentionally no click handler on the image/tile, so it remains an inline display option.
+            cell.appendChild(displayTile);
             const upload = document.createElement('input');
             upload.type = 'file'; upload.accept = 'image/*'; upload.setAttribute('capture','environment');
             upload.style.display = 'none';
