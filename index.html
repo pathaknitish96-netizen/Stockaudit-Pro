@@ -145,7 +145,13 @@
 #archiveCalendarDays button.is-selected { outline:2px solid #7c3aed; outline-offset:1px; }
 #archiveCalendarDays button.is-today:not(.pv-completed) { border-color:#7c3aed; color:#6d28d9; font-weight:800; }
 #archiveCalendarDays button:disabled { opacity:.25; cursor:default; }
-
+/* Keep the calendar inside the layout on narrow screens so it never hangs off-screen or covers the archive table. */
+@media (max-width: 640px) {
+  #archiveTab .relative:has(> #archiveCalendarPanel) { width:100%; max-width:100%; }
+  #archiveCalendarPanel { position:static !important; inset:auto !important; transform:none !important; width:min(320px, calc(100vw - 56px)) !important; max-width:100% !important; margin:8px 0 0 !important; box-sizing:border-box; z-index:1 !important; }
+  #archiveCalendarToggle { max-width:100%; }
+  #archiveCalendarDays button { min-height:36px; }
+}
 
 </style>
  </head>
