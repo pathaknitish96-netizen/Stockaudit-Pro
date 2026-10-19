@@ -1237,26 +1237,77 @@
             showToast('Material photo saved.', 'success');
             setTimeout(closeMaterialPhotoSearch, 900);
         }
-        function addMaterialImageButton(row, item) {
-            const cell = row && row.cells ? row.cells[2] : null;
-            if (!cell) return;
-            if (item.imageUrl) {
-                const preview = document.createElement('img'); preview.src = item.imageThumb || item.imageUrl; preview.alt = 'Saved material photo';
-                preview.loading = 'lazy'; preview.style.cssText = 'display:block;width:88px;height:62px;object-fit:cover;border-radius:7px;border:1px solid #cbd5e1;margin:7px 0 4px';
-                preview.title = 'Saved material photo';
-                preview.addEventListener('click', () => { if(item.imageUrl) window.open(item.imageUrl, '_blank', 'noopener,noreferrer'); });
-                cell.appendChild(document.createElement('br')); cell.appendChild(preview);
+        function addMaterialImageButton(row, item, tableId) {
+            if (!row || !tableId) return;
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            // Add a dedicated Photo column without shifting existing filter-column indexes.
+            if (!table.dataset.photoColumnAdded) {
+                const headerRows = table.tHead ? Array.from(table.tHead.rows) : [];
+                headerRows.forEach((hr, idx) => {
+                    const c = document.createElement(idx === 0 ? 'th' : 'td');
+                    c.className = 'p-2';
+                    if (idx === 0) c.textContent = 'Photo';
+                    else c.className += ' no-print';
+                    hr.appendChild(c);
+                });
+                table.dataset.photoColumnAdded = '1';
             }
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'mt-1 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100';
-            button.innerHTML = '<i class="fa-solid fa-image"></i> ' + (item.imageUrl ? 'Change material photo' : 'Find material photo');
-            button.title = 'Search Unsplash photos inside StockAudit Pro';
-            button.addEventListener('click', function(event) {
-                event.preventDefault(); event.stopPropagation();
-                openMaterialPhotoSearch(item.code, item.name, item.id);
+            const cell = document.createElement('td');
+            cell.className = 'p-2 align-top';
+            cell.style.minWidth = '118px';
+            if (item.imageUrl) {
+                const preview = document.createElement('img');
+                preview.src = item.imageThumb || item.imageUrl; preview.alt = 'Saved material photo';
+                preview.loading = 'lazy'; preview.style.cssText = 'display:block;width:84px;height:58px;object-fit:cover;border-radius:7px;border:1px solid #cbd5e1;margin:0 0 5px';
+                preview.title = 'Saved material photo';
+                cell.appendChild(preview);
+            }
+            const upload = document.createElement('input');
+            upload.type = 'file'; upload.accept = 'image/*'; upload.setAttribute('capture','environment');
+            upload.style.display = 'none';
+            upload.addEventListener('change', async function() {
+                const file = this.files && this.files[0]; if (!file) return;
+                if (!file.type.startsWith('image/')) { showToast('Please choose an image file.', 'error'); return; }
+                try {
+                    const dataUrl = await compressMaterialPhoto(file);
+                    const target = inventoryData.find(x => String(x.id) === String(item.id)); if (!target) return;
+                    target.imageUrl = dataUrl; target.imageThumb = dataUrl; target.imageSource = 'Camera/Upload';
+                    target.imageAuthor = ''; target.imageAuthorUrl = ''; target.imagePageUrl = '';
+                    saveStateToLocalStorage(); renderAllViews(); showToast('Photo saved to material.', 'success');
+                } catch (err) { showToast('Could not load photo. Try a smaller image.', 'error'); }
             });
-            cell.appendChild(document.createElement('br')); cell.appendChild(button);
+            cell.appendChild(upload);
+            const smallBtn = (label, icon, handler) => {
+                const b = document.createElement('button'); b.type = 'button';
+                b.className = 'inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100';
+                b.style.margin = '2px 2px 2px 0'; b.innerHTML = '<i class="fa-solid ' + icon + '"></i> ' + label;
+                b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); handler(); }); cell.appendChild(b); return b;
+            };
+            smallBtn(item.imageUrl ? 'Change' : 'Add photo', 'fa-camera', () => upload.click());
+            smallBtn('Unsplash', 'fa-image', () => openMaterialPhotoSearch(item.code, item.name, item.id));
+            smallBtn('Google', 'fa-magnifying-glass', () => {
+                const q = [item.name, item.code, 'material photo'].filter(Boolean).join(' ');
+                window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(q), '_blank', 'noopener,noreferrer');
+            });
+            row.appendChild(cell);
+        }
+        function compressMaterialPhoto(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = reject;
+                reader.onload = () => {
+                    const img = new Image(); img.onerror = reject;
+                    img.onload = () => {
+                        const max = 1000, scale = Math.min(1, max / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas'); canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+                        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.72));
+                    };
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         // Main Physical Quantity Update Engine
@@ -1351,7 +1402,7 @@
                         <span class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full">PENDING</span>
                     </td>
                 `;
-                addMaterialImageButton(tr, item);
+                addMaterialImageButton(tr, item, tbody.closest('table')?.id);
                 tbody.appendChild(tr);
             });
                     reapplySavedDropdownFilters('tablePvCount');
@@ -1405,7 +1456,7 @@
                     </td>
                     <td class="p-3 text-center">${badge}</td>
                 `;
-                addMaterialImageButton(tr, item);
+                addMaterialImageButton(tr, item, tbody.closest('table')?.id);
                 tbody.appendChild(tr);
             });
         }
@@ -1454,7 +1505,7 @@
                     </td>
                     <td class="p-3 text-center">${statusBadge}</td>
                 `;
-                addMaterialImageButton(tr, item);
+                addMaterialImageButton(tr, item, tbody.closest('table')?.id);
                 tbody.appendChild(tr);
             });
         }
@@ -1585,7 +1636,7 @@
                     <td class="p-3 text-slate-500">${item.unit ?? ''}</td>
                     <td class="p-3 font-medium text-slate-600">${item.date}</td>
                     <td class="p-3"><input type="text" value="${item.remarks ?? ''}" class="w-full px-2 py-1 text-xs border border-slate-200 rounded" onchange="updateRemarks(${item.id}, this.value)"></td>`;
-                addMaterialImageButton(tr, item);
+                addMaterialImageButton(tr, item, tbody.closest('table')?.id);
                 tbody.appendChild(tr);
             });
             if (typeof applyArchiveSearch === 'function') applyArchiveSearch();
@@ -1631,7 +1682,7 @@
                                onchange="updateRemarks(${item.id}, this.value)">
                     </td>
                 `;
-                addMaterialImageButton(tr, item);
+                addMaterialImageButton(tr, item, tbody.closest('table')?.id);
                 tbody.appendChild(tr);
             });
             if (typeof applyArchiveSearch === 'function') applyArchiveSearch();
@@ -2111,9 +2162,10 @@
     </div>
     <div style="padding:15px 16px">
      <label for="materialPhotoApiKey" style="display:block;font-weight:700;font-size:13px;margin-bottom:5px;color:#334155">Unsplash Access Key</label> <input id="materialPhotoApiKey" type="password" autocomplete="off" placeholder="Paste Access Key (not Secret Key)" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:9px;margin-bottom:10px"> <label for="materialPhotoQuery" style="display:block;font-weight:700;font-size:13px;margin-bottom:5px;color:#334155">Material search</label>
-     <div style="display:flex;gap:8px">
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input id="materialPhotoQuery" type="search" placeholder="Material description or code" style="min-width:0;flex:1;padding:11px;border:1px solid #cbd5e1;border-radius:9px">
-      <button type="button" onclick="searchUnsplashMaterialPhotos()" style="padding:10px 14px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:700">Search</button>
+      <button type="button" onclick="searchUnsplashMaterialPhotos()" style="padding:10px 14px;border:0;border-radius:9px;background:#2563eb;color:white;font-weight:700">Unsplash</button>
+      <button type="button" onclick="window.open('https://www.google.com/search?tbm=isch&amp;q='+encodeURIComponent(document.getElementById('materialPhotoQuery').value.trim()),'_blank','noopener,noreferrer')" style="padding:10px 12px;border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;color:#1d4ed8;font-weight:700">Google Images</button>
      </div>
      <p id="materialPhotoStatus" role="status" style="font-size:13px;color:#475569;margin:12px 0"></p>
      <div id="materialPhotoResults" class="mp-grid"></div>
