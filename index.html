@@ -1208,11 +1208,37 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
                         showToast('No usable inventory data found. Please check that the sheet contains item rows.', 'error');
                         return;
                     }
-                    inventoryData = imported;
+                    // Merge the updated Excel by normalized material code. Preserve PV counts,
+                    // remarks, photos, dates and existing records; update only imported master fields.
+                    const codeKey = value => String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+                    const existingByCode = new Map();
+                    inventoryData.forEach(item => {
+                        const key = codeKey(item.code);
+                        if (key && !existingByCode.has(key)) existingByCode.set(key, item);
+                    });
+                    let nextId = inventoryData.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+                    let updatedCount = 0, newCount = 0;
+                    const merged = inventoryData.slice();
+                    imported.forEach(incoming => {
+                        const key = codeKey(incoming.code);
+                        const existing = key ? existingByCode.get(key) : null;
+                        if (existing) {
+                            existing.name = incoming.name || existing.name;
+                            existing.systemQty = incoming.systemQty;
+                            existing.unit = incoming.unit || existing.unit;
+                            updatedCount++;
+                        } else {
+                            incoming.id = nextId++;
+                            merged.push(incoming);
+                            if (key) existingByCode.set(key, incoming);
+                            newCount++;
+                        }
+                    });
+                    inventoryData = merged;
                     saveStateToLocalStorage();
                     renderAllViews();
-                    writeActivityLog('inventory_uploaded', `Imported ${inventoryData.length} inventory rows from ${file.name}`);
-                    showToast(`Successfully imported ${inventoryData.length} items!`, 'success');
+                    writeActivityLog('inventory_uploaded', `Merged updated Excel ${file.name}; ${updatedCount} existing materials updated, ${newCount} new materials added. Existing PV records preserved.`);
+                    showToast(`Excel synced: ${updatedCount} updated, ${newCount} new. Saved PV data preserved.`, 'success');
                 } catch (err) {
                     console.error('Excel import error:', err);
                     showToast('Could not read this file. Please upload a valid .xlsx, .xls or .csv file.', 'error');
@@ -1415,12 +1441,15 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
                 pvRow.dataset.pvCompleted = 'true';
             }
 
+            // Re-evaluate routing immediately after every saved count. Matched counts
+            // appear in Archive; unmatched counts appear in Difference. Keep PV row DOM
+            // intact while typing so Android's keyboard is not closed.
+            renderDifferenceTable();
+            renderArchiveCalendar();
             if (activeTab === 'pvCountTab') {
                 reapplySavedDropdownFilters('tablePvCount');
-            } else if (activeTab === 'differenceTab') {
-                renderDifferenceTable();
             } else if (activeTab === 'archiveTab') {
-                loadArchiveByDate();
+                if (archiveAllPvMode) loadAllPvArchive(); else loadArchiveByDate();
             }
         }
 
@@ -1688,7 +1717,7 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
             }
             tbody.innerHTML = '';
             const archivedItems = inventoryData
-                .filter(item => item && item.physicalQty !== null && item.physicalQty !== undefined && item.physicalQty !== '' && item.date)
+                .filter(item => item && item.physicalQty !== null && item.physicalQty !== undefined && item.physicalQty !== '' && item.date && Number(item.physicalQty) === Number(item.systemQty))
                 .slice()
                 .sort((a, b) => String(b.date).localeCompare(String(a.date)));
             if (archivedItems.length === 0) {
@@ -1722,7 +1751,7 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
 
             if (!selectedDate) return;
 
-            const archivedItems = inventoryData.filter(item => item.physicalQty !== null && item.physicalQty !== undefined && item.physicalQty !== '' && String(item.date || '').slice(0, 10) === selectedDate);
+            const archivedItems = inventoryData.filter(item => item.physicalQty !== null && item.physicalQty !== undefined && item.physicalQty !== '' && String(item.date || '').slice(0, 10) === selectedDate && Number(item.physicalQty) === Number(item.systemQty));
 
             if (archivedItems.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400">No physical counts recorded for ${selectedDate}.</td></tr>`;
