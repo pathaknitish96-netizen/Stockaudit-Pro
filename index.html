@@ -315,6 +315,7 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
      <button onclick="switchTab('differenceTab')" id="btn-differenceTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-triangle-exclamation"></i> <span>Difference List</span> <span id="diffBadge" class="ml-1 px-2 py-0.5 text-xs bg-rose-500 text-white font-bold rounded-full">0</span></button>
      <button onclick="switchTab('perpetualTab')" id="btn-perpetualTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-layer-group"></i> <span>Perpetual Counting</span></button>
      <button onclick="switchTab('archiveTab')" id="btn-archiveTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-box-archive"></i> <span>Date Archive</span></button>
+     <button onclick="switchTab('masterFilterTab')" id="btn-masterFilterTab" class="tab-btn px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-magnifying-glass-chart"></i> <span>Master Material Finder</span></button>
      <button onclick="switchTab('usersTab')" id="btn-usersTab" class="tab-btn hidden px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center space-x-2"><i class="fa-solid fa-users-gear"></i><span>User Management</span></button>
     </nav>
    </aside>
@@ -599,6 +600,60 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
        </thead>
        <tbody id="archiveTbody" class="divide-y divide-slate-100 text-slate-700">
         <!-- Archive Rows Loaded JS -->
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </section>
+   <!-- MASTER MATERIAL FINDER: searches across all saved report categories -->
+   <section id="masterFilterTab" class="tab-content hidden space-y-4">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+     <div>
+      <h2 class="text-lg font-bold text-slate-800 flex items-center"><i class="fa-solid fa-magnifying-glass-chart text-indigo-600 mr-2"></i> Master Material Finder</h2>
+      <p class="text-xs text-slate-500 mt-1">Material code ya description search karein. Yeh batayega material abhi kis report/list mein hai.</p>
+     </div>
+     <div class="flex flex-wrap gap-2">
+      <input id="masterMaterialSearch" type="search" oninput="renderMasterMaterialFinder()" placeholder="Enter material code or description..." class="flex-1 min-w-[220px] px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <button type="button" onclick="document.getElementById('masterMaterialSearch').value='';renderMasterMaterialFinder();" class="px-4 py-2 border border-slate-300 rounded-lg text-sm font-semibold hover:bg-slate-50"><i class="fa-solid fa-xmark mr-1"></i> Clear</button>
+     </div>
+     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="masterFinderStats">
+      <div class="p-3 rounded-lg bg-slate-50 border">
+       <div class="text-xs text-slate-500">Total Matches</div>
+       <div id="masterFinderTotal" class="text-xl font-bold">0</div>
+      </div>
+      <div class="p-3 rounded-lg bg-amber-50 border border-amber-100">
+       <div class="text-xs text-amber-700">PV Pending</div>
+       <div id="masterFinderPending" class="text-xl font-bold text-amber-700">0</div>
+      </div>
+      <div class="p-3 rounded-lg bg-rose-50 border border-rose-100">
+       <div class="text-xs text-rose-700">Difference Report</div>
+       <div id="masterFinderDifference" class="text-xl font-bold text-rose-700">0</div>
+      </div>
+      <div class="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+       <div class="text-xs text-emerald-700">Archive / Matched</div>
+       <div id="masterFinderArchive" class="text-xl font-bold text-emerald-700">0</div>
+      </div>
+     </div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+     <div class="overflow-x-auto max-h-[650px]">
+      <table class="w-full text-left text-xs border-collapse sticky-thead" id="tableMasterFinder">
+       <thead class="bg-slate-100 text-slate-700 uppercase font-semibold border-b border-slate-200">
+        <tr>
+         <th class="p-3">#</th>
+         <th class="p-3">Material Code</th>
+         <th class="p-3">Description</th>
+         <th class="p-3 text-right">System Qty</th>
+         <th class="p-3 text-right">Physical Qty</th>
+         <th class="p-3 text-right">Difference</th>
+         <th class="p-3">Report / Location</th>
+         <th class="p-3">Verification Date</th>
+        </tr>
+       </thead>
+       <tbody id="masterFinderTbody" class="divide-y divide-slate-100 text-slate-700">
+        <tr>
+         <td colspan="8" class="p-6 text-center text-slate-400">Search by material code or description to see report locations.</td>
+        </tr>
        </tbody>
       </table>
      </div>
@@ -2084,12 +2139,54 @@ button.bg-slate-800,button.bg-slate-700{background:#203b55!important}
             document.getElementById('diffBadge').innerText = diffCount;
         }
 
+
+        // Master Material Finder: shows every matching material and its current report location(s).
+        function renderMasterMaterialFinder() {
+            const input = document.getElementById('masterMaterialSearch');
+            const tbody = document.getElementById('masterFinderTbody');
+            if (!input || !tbody) return;
+            const query = String(input.value || '').trim().toLowerCase();
+            const matches = (Array.isArray(inventoryData) ? inventoryData : []).filter(item =>
+                !query || String(item.code ?? '').toLowerCase().includes(query) || String(item.name ?? '').toLowerCase().includes(query)
+            );
+            let pendingCount = 0, differenceCount = 0, archiveCount = 0;
+            tbody.innerHTML = '';
+            const setCell = (tr, value, cls='p-3') => { const td = document.createElement('td'); td.className = cls; td.textContent = value == null ? '' : String(value); tr.appendChild(td); };
+            if (!matches.length) {
+                const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 8; td.className = 'p-6 text-center text-slate-400'; td.textContent = query ? 'No material found for this search.' : 'No inventory data loaded yet.'; tr.appendChild(td); tbody.appendChild(tr);
+            }
+            matches.forEach((item, index) => {
+                const hasCount = item.physicalQty !== null && item.physicalQty !== undefined && item.physicalQty !== '';
+                const diff = hasCount ? Number(item.physicalQty) - Number(item.systemQty) : null;
+                const locations = [];
+                if (!hasCount) { locations.push('PV Count (Pending)'); pendingCount++; }
+                else if (diff !== 0) { locations.push('Difference Report'); differenceCount++; }
+                else { locations.push('Date Archive / Matched'); archiveCount++; }
+                locations.push('Inventory Master');
+                const tr = document.createElement('tr'); tr.className = 'hover:bg-slate-50 border-b border-slate-100';
+                setCell(tr, index + 1, 'p-3 text-slate-400');
+                setCell(tr, item.code, 'p-3 font-semibold text-slate-800');
+                setCell(tr, item.name, 'p-3');
+                setCell(tr, item.systemQty, 'p-3 text-right');
+                setCell(tr, hasCount ? item.physicalQty : '—', 'p-3 text-right');
+                setCell(tr, hasCount ? diff : '—', 'p-3 text-right ' + (hasCount && diff !== 0 ? 'font-bold text-rose-600' : ''));
+                setCell(tr, locations.join(' • '), 'p-3 font-medium');
+                setCell(tr, item.date || '—', 'p-3');
+                tbody.appendChild(tr);
+            });
+            document.getElementById('masterFinderTotal').textContent = matches.length;
+            document.getElementById('masterFinderPending').textContent = pendingCount;
+            document.getElementById('masterFinderDifference').textContent = differenceCount;
+            document.getElementById('masterFinderArchive').textContent = archiveCount;
+        }
+
         // Render All Views Sync
         function renderAllViews() {
             updateStatsAndBadges();
             renderPvCountTable();
             renderDifferenceTable();
             renderArchiveCalendar();
+            renderMasterMaterialFinder();
         }
 
         // Local Storage Persistence
